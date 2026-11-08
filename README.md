@@ -1,0 +1,101 @@
+<p align="center"><img src="brand/logo-512.png" width="160" alt="Windows Weather logo"></p>
+
+# Windows Weather
+
+The weather outside, on your Windows desktop. When it snows where you are, snow falls across your screen and piles
+up on the tops of your windows and the taskbar. Rain falls from the clouds and collects in puddles. Clouds drift
+across the top of the screen at their real height, fog thickens with the real visibility, the sun catches the top
+edges of your windows, and in autumn leaves fall.
+
+It all reacts to you: drag a window fast and the snow flies off, resize it and the snow breaks up and falls, sweep
+the cursor through a cloud and it drifts away. Clicks always go straight through to your windows.
+
+## Download
+
+**[Download the latest WindowsWeather.exe](https://github.com/PandaPlayz2373/WindowsWeather/releases/latest)** (one
+file, about 8 MB, nothing to install).
+
+1. Put `WindowsWeather.exe` anywhere you like (Documents is fine) and double-click it.
+2. Windows may show **"Windows protected your PC"** because the app is new and not code-signed. Click
+   **More info**, then **Run anyway**. Some antivirus programs also check a new app for a few minutes the first
+   time it runs.
+3. A small window icon appears in the tray (bottom-right, sometimes behind the **^** arrow). Click it for the
+   menu. It starts with Windows from then on; switch that off in the menu if you prefer.
+
+Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
+
+## What it shows
+
+| Outside | On your desktop |
+|---|---|
+| Snow | Flakes fall and pile up on window tops, the taskbar and notification pop-ups; heavier snowfall means more flakes, deeper snow on the ground means taller piles |
+| Rain, drizzle, storms | Rain falls from the clouds, splashes, and pools into puddles on window tops; storms add a soft flash |
+| Hail | Pellets that bounce off window tops |
+| Clouds | Low, mid and high clouds drawn at their real heights; the cursor pushes them aside and they drift back together |
+| Fog | A soft layer over the whole screen, as thick as the real visibility |
+| Sun | Light along the top edges of your windows, brightest on the side facing the real sun |
+| Sunset | Clouds lit gold, pink and violet from the inside as the real sun sets |
+| Freezing and humid | Frost crystals slowly grow in from the edges of the screen |
+| Autumn | Leaves tumble down, more when it is windy, and settle on your windows |
+| Clear night | The real moon, in its real phase and place; an aurora on nights strong enough to see one from where you are |
+| Wind | Gusts push the snow, rain and leaves, and blow snow off the edges |
+| Poor air quality | A faint haze |
+
+The menu lets you preview any of these, adjust how much snow, rain, leaves and clouds you get, set a city by hand,
+scrub through the time of day, and see what the app is costing your computer right now.
+
+## Light on your computer
+
+Measured on a laptop with an Intel Core Ultra 7 (8 cores), snowing at 30 frames a second:
+
+| | CPU (share of the whole laptop) | Memory |
+|---|---|---|
+| Snowing | about 0.4% | 10 to 40 MB |
+| Snowing on battery (20 fps) | about 0.3% | |
+| Sun glow, nothing moving | close to 0 (it stops drawing) | |
+| Paused | about 0.01% | |
+
+It draws with the graphics card through DirectComposition, stops drawing entirely whenever nothing on screen is
+moving, and pauses by itself for full-screen games and videos, when the screen is locked or off, and on battery
+saver.
+
+## Privacy
+
+There are no accounts, no ads and no analytics. To show your local weather the app sends your approximate location
+to these free services, and nothing else:
+
+- **Your location**: Windows location services if you allow them, otherwise an approximate location from your IP
+  address ([ipwho.is](https://ipwho.is), [ipapi.co](https://ipapi.co)). You can type a city instead in the menu.
+- **Place name**: [BigDataCloud](https://www.bigdatacloud.com) reverse geocoding.
+- **Weather and air quality**: [Open-Meteo](https://open-meteo.com), every 15 minutes.
+- **Aurora index**: [NOAA Space Weather Prediction Center](https://www.swpc.noaa.gov).
+
+Settings and a small log are kept in `%APPDATA%\WindowsWeather` on your computer.
+
+## Uninstall
+
+Click the tray icon, open settings (the gear) and choose **Quit**. Then delete `WindowsWeather.exe` and the folder
+`%APPDATA%\WindowsWeather`. Turn off **Start with Windows** in settings first if you want the startup entry
+removed too, or run [`scripts/uninstall.ps1`](scripts/uninstall.ps1), which does all of it.
+
+## Build it yourself
+
+You need the [.NET 9 SDK](https://dotnet.microsoft.com/download) and Visual Studio Build Tools with the C++ workload
+(for Native AOT). Then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+```
+
+That builds a single native exe, copies it to `%LOCALAPPDATA%\Programs\WindowsWeather` and starts it. The code is in
+[`app/`](app): C# with Direct2D, DirectWrite and DirectComposition through
+[Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows), published with Native AOT.
+
+## Credits
+
+Weather and air-quality data by [Open-Meteo.com](https://open-meteo.com) (CC BY 4.0). Aurora data from NOAA SWPC.
+Place names by BigDataCloud.
+
+## License
+
+[MIT](LICENSE)
