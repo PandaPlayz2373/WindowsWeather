@@ -30,14 +30,14 @@ Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 | Outside | On your desktop |
 |---|---|
 | Snow | Flakes fall and pile up on window tops, the taskbar and notification pop-ups; heavier snowfall means more flakes, deeper snow on the ground means taller piles |
-| Rain, drizzle, storms | Rain falls from the clouds, splashes, and pools into puddles on window tops; storms add lightning strikes that fork down from the clouds and knock the snow and water off whatever they hit |
-| Hail | Pellets that bounce off window tops |
+| Rain, drizzle, storms | Rain falls from the clouds, splashes, and pools into puddles on window tops; storms add lightning: a forked bolt from the clouds, then a harder second strike, that knocks the snow and water off whatever it hits |
 | Clouds | Low, mid and high clouds drawn at their real heights; the cursor pushes them aside and they drift back together |
 | Fog | A soft layer over the whole screen, as thick as the real visibility |
 | Sun | Light along the top edges of your windows, brightest on the side facing the real sun |
 | Sunset | Clouds lit gold, pink and violet from the inside as the real sun sets |
 | Freezing and humid | Frost crystals slowly grow in from the edges of the screen |
 | Snowing or freezing | Icicles slowly grow down from the top corners of your windows, snap off if you resize or fling the window, and melt and drip when it warms up |
+| Snowballs | Clumps form on the snow piles and roll off the ends. Click one and drag it through the snow to roll it bigger, then throw it (a big one dropped hard bursts) |
 | Autumn | Leaves tumble down, more when it is windy, and settle on your windows |
 | Clear night | The real moon, in its real phase and place; an aurora on nights strong enough to see one from where you are |
 | Wind | Gusts push the snow, rain and leaves, and blow snow off the edges |
@@ -51,7 +51,8 @@ of maximized for a moment), and if you grab a window yourself it's yours again.
 
 | Disaster | What it does |
 |---|---|
-| Tornado | A funnel drops out of the clouds and crosses the screen, picks up your windows, swings them around and throws them, and tears the snow, puddles and leaves off everything it crosses |
+| Hail | Pellets that bounce off window tops and the taskbar |
+| Tornado | A funnel drops out of the clouds and crosses the screen, picks up your windows, swings them around and throws them, rips your taskbar icons off and carries them up the funnel, and tears the snow, puddles and leaves off everything it crosses |
 | Earthquake | A rumble, then the main shock: windows shake and walk, snow and leaves are shaken off, your taskbar icons jump off the taskbar, and a strong one cracks the screen (for a few seconds) |
 | Flood | Water rises from the bottom of the screen; windows float up and bob on it, taskbar icons float away, then it drains and everything settles back |
 

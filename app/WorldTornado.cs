@@ -91,8 +91,10 @@ public sealed partial class World
     {
         _torMon = m; _torOn = true; _torAge = 0; _torTouch = 0;
         _torDir = Rf() < 0.5f ? 1 : -1;
-        // Forms a little inside the screen edge, so the touchdown is in view, then crosses.
-        _torX = _torDir > 0 ? m.Bounds.Left + m.Bounds.Width * 0.14f : m.Bounds.Right - m.Bounds.Width * 0.14f;
+        // Forms just inside the screen edge, so the touchdown is in view and it still crosses everything on the taskbar
+        // from one end to the other (it should also take "the network and time and calendar and all
+        // that down there").
+        _torX = _torDir > 0 ? m.Bounds.Left + m.Bounds.Width * 0.025f : m.Bounds.Right - m.Bounds.Width * 0.025f;
         _torPhase = Rf() * 6.28f;
         _torTop = m.Bounds.Top + m.Bounds.Height * 0.2f;
         _torGround = GroundY(m);
@@ -122,7 +124,7 @@ public sealed partial class World
         bool leaving = Cur.Tornado < 0.3f;
         _torTouch = leaving ? MathF.Max(0, _torTouch - dt / 2.5f) : MathF.Min(1, _torTouch + dt / 3.5f);
         // Creeps while it touches down, then crosses at a walking pace that surges and stalls.
-        float speed = (75 + 40 * MathF.Sin(_torAge * 0.37f)) * s * Ss(_torTouch * 1.3f - 0.2f) * Mod("Tornado.Speed");
+        float speed = (75 + 40 * MathF.Sin(_torAge * 0.37f)) * s * Ss(_torTouch * 1.8f - 0.8f) * Mod("Tornado.Speed"); // stands still until it is nearly down
         _torX += _torDir * speed * dt;
         _torTop = m.Bounds.Top + m.Bounds.Height * 0.2f;
         _torGround = GroundY(m);
@@ -148,7 +150,39 @@ public sealed partial class World
                     break;
             }
         }
-        if (Now >= _torSuckAt) { _torSuckAt = Now + 0.06; SuckEdges(s); }
+        if (Now >= _torSuckAt) { _torSuckAt = Now + 0.06; SuckEdges(s); TornadoTakeIcons(s); }
+    }
+
+    // Taskbar icons the funnel touches down on are ripped off and spun up it ("i want tornado to do
+    // the same thing with the taking icons and things from your task bar"); they fly home once it has gone.
+    void TornadoTakeIcons(float s)
+    {
+        if (_torTouch < 0.75f || _torMon == null) return;
+        var mb = _torMon.Bounds;
+        Tracked? bar = null;
+        foreach (var w in Tracker.Z)
+            if (w.IsTaskbar && w.R.Left < mb.Right && w.R.Right > mb.Left && w.R.Top > mb.Top + mb.Height / 2) { bar = w; break; }
+        if (bar == null || bar.R.Top < _torGround - 2 || bar.R.Top > _torGround + 2) return; // only the taskbar it stands on
+        float ax = TorAxis(1), reach = TorR(1) * 2.5f + 30 * s;
+        if (ax + reach < bar.R.Left || ax - reach > bar.R.Right) return;
+        if (_tiles.Count == 0)
+        {
+            if (Now - _tbFailAt < 2) return;
+            if (!CaptureTaskbar(bar)) { _tbFailAt = Now; return; }
+        }
+        foreach (var t in _tiles)
+        {
+            if (t.Caught) continue;
+            float cx = t.X + t.W * 0.5f, cy = t.Y + t.H * 0.5f;
+            if (t.State == 1 && cy < _torGround - 40 * s) continue; // already in the air: thrown ones are not caught again
+            if (MathF.Abs(cx - ax) > reach) continue;
+            t.State = 1; t.Delay = 0; t.Spin = (Rf() - 0.5f) * 10;
+            // Carried a long way up before it is thrown: most of the way to the cloud.
+            t.Caught = true; t.CF = 1; t.CA = Rf() * MathF.Tau; t.CW = (3.2f + 2.2f * Rf()) * (Rf() < 0.5f ? 1 : -1);
+            t.Rise = 0.16f + 0.1f * Rf(); t.ThrowF = 0.08f + 0.25f * Rf();
+        }
+        _tbHomeAt = -1;
+        Kick(1);
     }
 
     // Snow and water on any edge the funnel crosses are torn off into it.

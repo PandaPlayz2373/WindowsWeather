@@ -247,6 +247,7 @@ public static unsafe class App
         _lastFrame = now;
         long p0 = Stopwatch.GetTimestamp();
         W.Step(dt);
+        SyncBallHandles(true);
         W.ProfStep += Stopwatch.GetTimestamp() - p0;
         try
         {
@@ -328,6 +329,7 @@ public static unsafe class App
             W.Monitors.Add(m);
             Log.Write($"monitor {r} scale {m.Scale:0.00}");
         }
+        W.RemapBalls();
         _needFinalFrame = true;
         T.Dirty = true;
         UpdatePauseState();
@@ -354,6 +356,7 @@ public static unsafe class App
         if (p)
         {
             W.RestoreWindows();
+            SyncBallHandles(false);
             DisarmTimer();
             T.SetQuiet(true);
             Native.KillTimer(_msgHwnd, TIMER_TOPMOST);
@@ -422,6 +425,83 @@ public static unsafe class App
         var fc = new WNDCLASSEXW { cbSize = (uint)sizeof(WNDCLASSEXW), lpfnWndProc = &FlyoutProc, hInstance = HInstance };
         fc.hCursor = Native.LoadCursorW(0, 32512);
         fixed (char* n = "WindowsWeatherFlyout") { fc.lpszClassName = n; Native.RegisterClassExW(&fc); }
+        var bc = new WNDCLASSEXW { cbSize = (uint)sizeof(WNDCLASSEXW), lpfnWndProc = &BallProc, hInstance = HInstance };
+        bc.hCursor = Native.LoadCursorW(0, 32649); // IDC_HAND: you can pick this up
+        fixed (char* n = "WindowsWeatherBall") { bc.lpszClassName = n; Native.RegisterClassExW(&bc); }
+    }
+
+    // ------------------------------------------------------------------ snowball handles
+    // Each snowball has a tiny, almost fully transparent window over it (alpha 1/255 still takes clicks), so the ball
+    // itself can be clicked and the app underneath never gets the click. Everything else stays click-through.
+
+    static readonly Dictionary<int, (nint h, int x, int y, int d)> _ballWins = new();
+    static readonly Dictionary<nint, int> _ballOfWin = new();
+
+    static void SyncBallHandles(bool show)
+    {
+        var seen = new HashSet<int>();
+        if (show)
+            foreach (var b in W.Balls)
+            {
+                seen.Add(b.Id);
+                int pad = (int)(5 * b.M.Scale), d = (int)MathF.Ceiling(b.R * 2) + pad * 2;
+                int x = (int)MathF.Round(b.X - b.R) - pad, y = (int)MathF.Round(b.Y - b.R) - pad;
+                if (!_ballWins.TryGetValue(b.Id, out var e))
+                {
+                    nint h;
+                    fixed (char* c = "WindowsWeatherBall")
+                        h = Native.CreateWindowExW(Native.WS_EX_LAYERED | Native.WS_EX_TOOLWINDOW | Native.WS_EX_TOPMOST | Native.WS_EX_NOACTIVATE,
+                            c, null, Native.WS_POPUP, x, y, d, d, 0, 0, HInstance, 0);
+                    if (h == 0) continue;
+                    Native.SetLayeredWindowAttributes(h, 0, 1, 2 /*LWA_ALPHA*/);
+                    Native.SetWindowRgn(h, Native.CreateEllipticRgn(0, 0, d, d), 0);
+                    Native.ShowWindow(h, Native.SW_SHOWNOACTIVATE);
+                    // Just below its screen's overlay (which is click-through), so the menu and other apps' floating
+                    // windows stay above it and keep their clicks.
+                    if (b.M.Ov != null) Native.SetWindowPos(h, b.M.Ov.Hwnd, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+                    T.AddOwn(h);
+                    _ballWins[b.Id] = (h, x, y, d); _ballOfWin[h] = b.Id;
+                }
+                else if (e.x != x || e.y != y || e.d != d)
+                {
+                    Native.SetWindowPos(e.h, 0, x, y, d, d, Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
+                    if (e.d != d) Native.SetWindowRgn(e.h, Native.CreateEllipticRgn(0, 0, d, d), 1);
+                    _ballWins[b.Id] = (e.h, x, y, d);
+                }
+            }
+        List<int>? gone = null;
+        foreach (var (id, e) in _ballWins) if (!seen.Contains(id)) (gone ??= new()).Add(id);
+        if (gone != null)
+            foreach (var id in gone)
+            {
+                var e = _ballWins[id];
+                _ballWins.Remove(id); _ballOfWin.Remove(e.h); T.RemoveOwn(e.h);
+                Native.DestroyWindow(e.h);
+            }
+    }
+
+    [UnmanagedCallersOnly]
+    static nint BallProc(nint h, uint m, nuint w, nint l)
+    {
+        try
+        {
+            switch (m)
+            {
+                case Native.WM_MOUSEACTIVATE: return Native.MA_NOACTIVATE; // never take focus from the app in front
+                case 0x0201: // WM_LBUTTONDOWN
+                    if (_ballOfWin.TryGetValue(h, out int id)) { W.GrabBall(id); Native.SetCapture(h); Native.PostMessageW(_msgHwnd, WM_KICK, 0, 0); }
+                    return 0;
+                case 0x0202: // WM_LBUTTONUP
+                    W.ReleaseBall();
+                    Native.ReleaseCapture();
+                    return 0;
+                case 0x0215: // WM_CAPTURECHANGED
+                    W.ReleaseBall();
+                    return 0;
+            }
+        }
+        catch (Exception e) { Log.Write("ball: " + e.Message); }
+        return Native.DefWindowProcW(h, m, w, l);
     }
 
     [UnmanagedCallersOnly]
@@ -558,7 +638,7 @@ public static unsafe class App
     internal static (string key, string label)[] ModsFor(string effect) => effect switch
     {
         "Live" => [("Snow", "Snow"), ("Rain", "Rain"), ("Leaves", "Leaves"), ("Clouds", "Clouds")],
-        "Snow" => [("Snow", "Amount"), ("Snow.Size", "Flake size"), ("Snow.Piles", "Pile height"), ("Icicles.Length", "Icicles")],
+        "Snow" => [("Snow", "Amount"), ("Snow.Size", "Flake size"), ("Snow.Piles", "Pile height"), ("Icicles.Length", "Icicles"), ("Snow.Snowballs", "Snowballs")],
         "Rain" => [("Rain", "Amount"), ("Rain.Speed", "Drop speed"), ("Rain.Puddles", "Puddles")],
         "Clouds" => [("Clouds", "Density"), ("Clouds.Height", "Height")],
         "Fog" => [("Fog.Thickness", "Thickness")],
@@ -740,7 +820,7 @@ public static unsafe class App
         IntLight = 130, IntMed, IntHeavy, Fps30 = 140, Fps60, LocAuto = 150, LocCity, Capture = 160, Startup, ClearSnow, Refresh, Saver, Quit = 199,
     }
 
-    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Hail", "Frost", "Aurora", "Off", "Tornado", "Earthquake", "Flood" };
+    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Frost", "Aurora", "Off", "Hail", "Tornado", "Earthquake", "Flood" };
     // One place for every effect's icon, so a new effect can never leave a picker short (1.0.3 crashed the settings
     // page: it had its own 14-icon list and Tornado made 15).
     internal static string GlyphFor(string effect) => effect switch
@@ -749,7 +829,7 @@ public static unsafe class App
         "Leaves" => "🍂", "Night" => "🌙", "Storm" => "⛈️", "Hail" => "🧊", "Frost" => "🥶", "Aurora" => "🌌",
         "Tornado" => "🌪️", "Earthquake" => "🏚️", "Flood" => "🌊", _ => "",
     };
-    internal const int FirstDisaster = 14; // Effects from here on are disasters (shown in their own section)
+    internal const int FirstDisaster = 13; // Hail moved here 2026-11-08 ("lets move hail into the disasters") // Effects from here on are disasters (shown in their own section)
 
     static void Append(nint menu, uint flags, Cmd id, string text) { fixed (char* t = text) Native.AppendMenuW(menu, flags, (nuint)id, t); }
     static void AppendSub(nint menu, nint sub, string text) { fixed (char* t = text) Native.AppendMenuW(menu, Native.MF_POPUP, (nuint)sub, t); }

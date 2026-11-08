@@ -211,7 +211,7 @@ public sealed unsafe partial class Flyout
         if (draw)
         {
             Text("Disasters", _label, new Rect(Pad, disY, iw, 16), Fg(0.62f));
-            Text("move your windows, then put them back", _small, new Rect(Pad + 70, disY, iw - 70, 16), Fg(0.45f));
+            Text("wreck things, then put it all back", _small, new Rect(Pad + 70, disY, iw - 70, 16), Fg(0.45f));
         }
         disY += 22;
         for (int i = 0; i < App.EffectNames.Length; i++)

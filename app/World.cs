@@ -142,6 +142,7 @@ public sealed partial class World
             // The cap breaks up and falls off, and the icicles snap.
             DropPile(w, 0, 0);
             BreakIcicles(w, 0, 0);
+            BallsOffWindow(w, 0, 0);
             w.EnsureColumns();
             w.Vx = w.Vy = 0;
             return;
@@ -154,7 +155,7 @@ public sealed partial class World
         w.Vy = w.Vy * 0.45f + ivy * 0.55f;
         float speed = MathF.Sqrt(w.Vx * w.Vx + w.Vy * w.Vy);
         float fling = 1300 * w.Scale;
-        if (speed > fling) BreakIcicles(w, w.Vx, w.Vy);
+        if (speed > fling) { BreakIcicles(w, w.Vx, w.Vy); BallsOffWindow(w, w.Vx, w.Vy); }
         if (speed > fling && w.PileTotal > 0.5f)
             DropPile(w, w.Vx, w.Vy);          // flung: the snow flies off with the throw
         else if (speed > fling) LeavesFall(w, w.Vx, w.Vy);
@@ -184,6 +185,7 @@ public sealed partial class World
         _nFlakes = _nDebris = _nDrops = _nLeaves = _nHail = 0;
         foreach (var w in Tracker.Z) { if (w.Wt.Length > 0) Array.Clear(w.Wt); w.WaterTotal = 0; }
         _ripples.Clear();
+        _balls.Clear(); _held = null;
         Kick(0.2);
     }
 
@@ -233,6 +235,7 @@ public sealed partial class World
         StepGrabs(dt);
         StepTiles(dt);
         StepIcicles(dt);
+        StepSnowballs(dt);
         StepFlakes(dt);
         StepLeaves(dt);
         StepHail(dt);
@@ -257,6 +260,7 @@ public sealed partial class World
         CursorX = p.X; CursorY = p.Y;
         if (p.X == (int)px && p.Y == (int)py) return;
         LastCursorMove = Now;
+        if (HoldingBall) return; // the cursor is carrying a snowball: it doesn't brush anything else
         BrushPiles(px, py, p.X, p.Y);
         PushClouds(px, py, p.X, p.Y);
         KickLeaves(px, py, p.X, p.Y);
@@ -619,7 +623,7 @@ public sealed partial class World
         {
             _flashT = Now;
             // Most flashes come with a visible bolt; the rest are sheet lightning inside the clouds.
-            if (Monitors.Count > 0 && Rf() < 0.8f) MakeBolt(Monitors[PickMonitor()]);
+            if (Monitors.Count > 0 && Rf() < 0.95f) MakeBolt(Monitors[PickMonitor()]);
             _nextFlash = Now + (12 + Rf() * 28) / Mod("Storm.Frequency");
         }
     }
@@ -646,7 +650,7 @@ public sealed partial class World
         if (_nFlakes > 0 || _nDrops > 0 || _nDebris > 0 || Cur.Snow > 0.01f || Cur.Rain > 0.01f || Cur.Storm > 0.01f) return maxFps;
         if (Now < ActiveUntil) return maxFps;
         if (Now - LastCursorMove < 0.4) return maxFps;
-        if (BoltIntensity() > 0 || TornadoBusy) return maxFps;
+        if (BoltIntensity() > 0 || TornadoBusy || BallsMoving) return maxFps;
         if (_twinkles.Count > 0 || Now - _flashT < 1) return Math.Min(30, maxFps);
         if (Cur.MaxDiff(Target) > 0) return 15;
         if (_ripples.Count > 0) return maxFps;
@@ -660,6 +664,7 @@ public sealed partial class World
         if (_clouds.Count > 0) return 10;                     // clouds drifting: slow and cheap
         foreach (var w in Tracker.Z) if (w.WaterTotal > 0.05f && Cur.Rain < 0.05f && Cur.Storm < 0.05f) return 5; // puddles drying
         foreach (var w in Tracker.Z) if (w.PileTotal > 0.05f && Cur.Snow < 0.05f) return 5; // melting
+        if (_balls.Count > 0 && Cur.Snow < 0.05f) return 5;                                    // snowballs melting
         foreach (var w in Tracker.Z) if (Now - w.GlintStart < 0.8) return maxFps;
         if (_iciclesGrowing && extras < 5) return 5;                       // icicles growing or melting: slow
         return extras;
@@ -932,6 +937,7 @@ public sealed partial class World
             sp.Add(Atlas.Glint, t.X - r, t.Y - r, t.X + r, t.Y + r, new Color4(1, 1, 1, a));
         }
 
+        AddSnowballSprites(m);
         // Flood water in front of everything on the desktop.
         AddFloodSprites(m);
     }

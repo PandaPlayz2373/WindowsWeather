@@ -18,17 +18,20 @@ public sealed partial class World
     Vector2 _boltTop, _boltHit;
     bool _boltBlastPending;
 
-    const double BoltLife = 0.55;
+    const double BoltLife = 0.9;
 
-    /// <summary>Brightness of the bolt over its life: strike, dim, one restrike, fade. 0 when gone.</summary>
+    /// <summary>Brightness of the bolt over its life ("it should be a strike and a harder strike not
+    /// just a flash"): a first strike, a short dim, then a harder return strike (above 1: brighter and thicker), then a
+    /// fade. 0 when gone.</summary>
     float BoltIntensity()
     {
         double t = Now - _boltT;
         if (_bolt.Count == 0 || t < 0 || t > BoltLife) return 0;
-        if (t < 0.035) return (float)(0.6 + t / 0.035 * 0.4);
-        if (t < 0.085) return (float)(1 - (t - 0.035) / 0.05 * 0.7);
-        if (t < 0.12) return (float)(0.3 + (t - 0.085) / 0.035 * 0.6);
-        return (float)(0.9 * Math.Exp(-(t - 0.12) * 8));
+        if (t < 0.05) return (float)(0.35 + t / 0.05 * 0.45);           // first strike
+        if (t < 0.13) return (float)(0.8 - (t - 0.05) / 0.08 * 0.6);    // dims
+        if (t < 0.17) return (float)(0.2 + (t - 0.13) / 0.04 * 1.2);    // the harder strike
+        if (t < 0.26) return 1.4f;
+        return (float)(1.4 * Math.Exp(-(t - 0.26) * 6));
     }
 
     public void StrikeNow() { if (Monitors.Count > 0) { MakeBolt(Monitors[PickMonitor()]); _flashT = Now; Kick(1); } }
@@ -156,20 +159,21 @@ public sealed partial class World
         var brush = gpu.FrostBrush;
         var oldAa = ctx.AntialiasMode;
         ctx.AntialiasMode = AntialiasMode.PerPrimitive;
+        float thick = MathF.Max(1, i);                                   // the harder strike is a thicker channel
         foreach (var g in _bolt)
         {
-            brush.Color = new Color4(0.62f, 0.70f, 1f, 0.10f * i * g.Al);
-            ctx.DrawLine(g.A, g.B, brush, g.W * 7f, gpu.RoundStroke);
+            brush.Color = new Color4(0.62f, 0.70f, 1f, MathF.Min(0.35f, 0.12f * i * g.Al));
+            ctx.DrawLine(g.A, g.B, brush, g.W * 8f * thick, gpu.RoundStroke);
         }
         foreach (var g in _bolt)
         {
-            brush.Color = new Color4(0.74f, 0.80f, 1f, 0.38f * i * g.Al);
-            ctx.DrawLine(g.A, g.B, brush, g.W * 2.6f, gpu.RoundStroke);
+            brush.Color = new Color4(0.74f, 0.80f, 1f, MathF.Min(0.8f, 0.42f * i * g.Al));
+            ctx.DrawLine(g.A, g.B, brush, g.W * 2.8f * thick, gpu.RoundStroke);
         }
         foreach (var g in _bolt)
         {
-            brush.Color = new Color4(1f, 1f, 1f, MathF.Min(1, 1.05f * i * g.Al));
-            ctx.DrawLine(g.A, g.B, brush, g.W, gpu.RoundStroke);
+            brush.Color = new Color4(1f, 1f, 1f, MathF.Min(1, 1.1f * i * g.Al));
+            ctx.DrawLine(g.A, g.B, brush, g.W * (0.8f + 0.5f * thick), gpu.RoundStroke);
         }
         ctx.AntialiasMode = oldAa;
     }
