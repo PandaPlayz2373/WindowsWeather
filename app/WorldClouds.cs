@@ -52,15 +52,17 @@ public sealed partial class World
         0 => MathF.Max(Cur.Low, Rainy > 0.05f ? 0.45f + Rainy * 0.45f : 0), // rain needs low clouds to fall from
         1 => Cur.Mid,
         2 => Cur.High,
-        _ => Cur.Fog,
+        _ => Cur.Fog * Mod("Fog.Thickness"),
     };
 
     int CloudTarget(Monitor m, int layer) => (int)MathF.Round(LayerAmount(layer) * PerScreen[layer] * (layer == 3 ? 1 : CloudAmt) * m.Bounds.Width / 1920f);
 
-    static float LayerBottom(Monitor m, int layer) => m.Bounds.Top + m.Bounds.Height * BandBot[layer];
+    // Cloud height modifier: above 1 lifts every sky layer toward the top of the screen, below 1 lowers it.
+    float BandF(float f, int layer) => layer == 3 ? f : MathF.Min(0.92f, f / Math.Clamp(Mod("Clouds.Height"), 0.4f, 2.5f));
+    float LayerBottom(Monitor m, int layer) => m.Bounds.Top + m.Bounds.Height * BandF(BandBot[layer], layer);
 
     /// <summary>Lowest point of the sky clouds (fog excluded): the cursor only matters above it, unless there is fog.</summary>
-    static float CloudBandBottom(Monitor m) => LayerBottom(m, 0);
+    float CloudBandBottom(Monitor m) => LayerBottom(m, 0);
 
     void SpawnCloud(int mi, int layer)
     {
@@ -74,7 +76,7 @@ public sealed partial class World
             case 2: w = (200 + Rf() * 320) * s; ch = w * (0.09f + Rf() * 0.05f); break;
             default: w = (380 + Rf() * 420) * s; ch = w * (0.30f + Rf() * 0.10f); break;
         }
-        float top = m.Bounds.Top + h * BandTop[layer], bot = LayerBottom(m, layer);
+        float top = m.Bounds.Top + h * BandF(BandTop[layer], layer), bot = LayerBottom(m, layer);
         var c = new Cloud
         {
             Mon = mi, Layer = layer, W = w, Fade = 0, Rainy = layer == 0 ? Rainy : 0,
@@ -267,6 +269,7 @@ public sealed partial class World
         var b = m.Bounds;
         float s = m.Scale;
         var (lit, under, f) = SkyColours();
+        f = MathF.Min(1.5f, f * Mod("Sunset.Colour"));
         SunsetAmount = f;
         float side = SunX >= 0 ? 1 : -1;
         // Overcast: a faint sheet across the top that fades out by mid-screen.

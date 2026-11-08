@@ -83,6 +83,7 @@ public sealed partial class World
                 bool gone = !w.Eligible || w.Spans.Count == 0 || !Tracker.Z.Contains(w) || !InSpans(w, (int)(l.OffX / w.ColW));
                 if (gone) { l.On = null; l.Vy = 30 * s; l.Spin = (Rf() - .5f) * 4; continue; }
                 if (_torOn && TorInfluence(l.X, l.Y, out _, out _) > 0.3f) { l.On = null; l.Vy = -180 * s; l.Spin = (Rf() - .5f) * 12; continue; }
+                if (_flLevel > 0 && l.Y > FloodY(m, l.X)) { l.On = null; l.Vy = -40 * s; continue; }
                 l.X = w.R.Left + l.OffX; l.Y = w.R.Top - l.Size * 0.18f;
                 if (l.Rest > 75 || (Cur.Leaves < 0.02f && l.Rest > 8)) { _leaves[i] = _leaves[--_nLeaves]; i--; }
                 continue;
@@ -92,9 +93,21 @@ public sealed partial class World
             float sway = MathF.Sin(l.Phase);
             float targetVy = (30 + 22 * MathF.Abs(MathF.Cos(l.Phase))) * s;
             l.Vy += (targetVy - l.Vy) * MathF.Min(1, dt * 1.5f);
-            float targetVx = (WindX * 1.4f + GustX * 1.2f) * s + sway * 55 * s;
+            float targetVx = (WindX * 1.4f + GustX * 1.2f) * Mod("Leaves.Wind") * s + sway * 55 * s;
             l.Vx += (targetVx - l.Vx) * MathF.Min(1, dt * 1.2f);
             if (_torOn) { TornadoPull(l.X, l.Y, s, dt, 300 * s, ref l.Vx, ref l.Vy); }
+            if (_flLevel > 0)
+            {
+                // Floating: held at the surface and carried along it.
+                float wy = FloodY(m, l.X);
+                if (l.Y > wy - l.Size * 0.15f)
+                {
+                    l.Vy = (wy - l.Size * 0.15f - l.Y) * 4;
+                    l.Vx = MathF.Sin((float)Now * 0.3f + l.Phase) * 30 * s;
+                    l.Spin *= MathF.Exp(-dt * 3);
+                    l.Phase -= dt * (1.6f + l.Size * 0.02f / s) * 0.9f; // hardly any flutter on the water
+                }
+            }
             float oy = l.Y;
             l.X += l.Vx * dt; l.Y += l.Vy * dt;
             l.Ang += (l.Spin + sway * 1.4f) * dt;

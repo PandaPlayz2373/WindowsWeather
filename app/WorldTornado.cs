@@ -15,26 +15,12 @@ public sealed partial class World
     bool _torOn;
     Monitor? _torMon;
     float _torX, _torDir = 1, _torPhase, _torAge, _torTouch, _torTop, _torGround;
-    double _torNext, _grabScanAt, _torSuckAt;
+    double _torNext, _torSuckAt;
 
     struct TPart { public float F, A, W, Size, Shade; public byte Kind; }
     readonly TPart[] _tp = new TPart[300];
 
-    sealed class Grab
-    {
-        public nint H; public Tracked? T; public Monitor M = null!;
-        public int OX, OY, LX, LY, Wd, Ht;
-        public float Ox, Oy, Vx, Vy, Mass, Calm, Held, Immune, ThrowAt;
-        public bool Home;
-    }
-    readonly List<Grab> _grabs = new();
 
-    /// <summary>Testing: only windows whose title starts with this are picked up (null = any window).</summary>
-    public string? GrabOnlyTitle;
-
-    const uint MoveFlags = 0x0001 | 0x0004 | 0x0010 | 0x0200 | 0x4000; // NOSIZE NOZORDER NOACTIVATE NOOWNERZORDER ASYNCWINDOWPOS
-
-    public bool TornadoBusy => _torOn || _grabs.Count > 0;
 
     // ------------------------------------------------------------------ funnel geometry (f: 0 = cloud base, 1 = ground)
 
@@ -43,7 +29,7 @@ public sealed partial class World
         float s = _torMon!.Scale;
         return _torX + (1 - f) * -_torDir * 70 * s + MathF.Sin(_torPhase + f * 4.2f) * 38 * s * 4 * f * (1 - f);
     }
-    float TorR(float f) => (24 + 200 * MathF.Pow(Math.Clamp(1 - f, 0, 1), 1.8f)) * _torMon!.Scale;
+    float TorR(float f) => (24 + 200 * MathF.Pow(Math.Clamp(1 - f, 0, 1), 1.8f)) * _torMon!.Scale * Mod("Tornado.Size");
     float TorY(float f) => _torTop + f * (_torGround - _torTop);
 
     static float Ss(float k) { k = Math.Clamp(k, 0, 1); return k * k * (3 - 2 * k); }
@@ -58,7 +44,7 @@ public sealed partial class World
         float fc = Math.Clamp(f, 0, 1);
         dx = x - TorAxis(fc);
         float r = TorR(fc) * 2.2f + 40 * _torMon.Scale;
-        return Ss(1 - MathF.Abs(dx) / r) * Cur.Tornado;
+        return Ss(1 - MathF.Abs(dx) / r) * Cur.Tornado * MathF.Min(1.5f, Mod("Tornado.Power"));
     }
 
     /// <summary>The same for a window: by its nearest side to the funnel, at the height of its top edge.</summary>
@@ -72,7 +58,7 @@ public sealed partial class World
         float near = ax < l ? l - ax : ax > r ? ax - r : 0;
         dx = (l + r) * 0.5f - ax;
         float rad = TorR(f) * 1.3f + 30 * _torMon.Scale;
-        return Ss(1 - near / rad) * Cur.Tornado;
+        return Ss(1 - near / rad) * Cur.Tornado * MathF.Min(1.5f, Mod("Tornado.Power"));
     }
 
     /// <summary>Pull a loose particle (leaf, snow chunk, water) into the funnel: spun across it, lifted, flung out the top.</summary>
@@ -91,7 +77,6 @@ public sealed partial class World
     {
         if (!_torOn && Cur.Tornado > 0.4f && Now >= _torNext && Monitors.Count > 0) StartTornado(Monitors[PickMonitor()]);
         if (_torOn) MoveTornado(dt);
-        StepGrabs(dt);
     }
 
     public void TornadoNow()
@@ -137,7 +122,7 @@ public sealed partial class World
         bool leaving = Cur.Tornado < 0.3f;
         _torTouch = leaving ? MathF.Max(0, _torTouch - dt / 2.5f) : MathF.Min(1, _torTouch + dt / 3.5f);
         // Creeps while it touches down, then crosses at a walking pace that surges and stalls.
-        float speed = (75 + 40 * MathF.Sin(_torAge * 0.37f)) * s * Ss(_torTouch * 1.3f - 0.2f);
+        float speed = (75 + 40 * MathF.Sin(_torAge * 0.37f)) * s * Ss(_torTouch * 1.3f - 0.2f) * Mod("Tornado.Speed");
         _torX += _torDir * speed * dt;
         _torTop = m.Bounds.Top + m.Bounds.Height * 0.2f;
         _torGround = GroundY(m);
@@ -205,117 +190,6 @@ public sealed partial class World
             }
             if (hit) { w.WaterTotal = MathF.Max(0, w.WaterTotal); RecountPile(w); }
         }
-    }
-
-    // ------------------------------------------------------------------ real windows
-
-    unsafe void ScanGrabs()
-    {
-        foreach (var t in Tracker.Z)
-        {
-            if (t.IsTaskbar || t.IsToast || t.Maximized || t.R.Width < 120 || t.R.Height < 80) continue;
-            bool have = false;
-            foreach (var g in _grabs) if (g.H == t.Hwnd) { have = true; break; }
-            if (have) continue;
-            if (WindowInfluence(t.R.Left, t.R.Top, t.R.Right, t.R.Bottom, out _) < 0.25f) continue;
-            if (Native.IsIconic(t.Hwnd) != 0 || Native.IsZoomed(t.Hwnd) != 0) continue;
-            long ex = Native.GetWindowLongPtrW(t.Hwnd, -20);
-            if ((ex & 0x8) != 0 || (ex & 0x80) != 0) continue; // topmost and tool windows stay put
-            if (GrabOnlyTitle != null && !Native.WindowText(t.Hwnd).StartsWith(GrabOnlyTitle)) continue;
-            RECT wr;
-            if (Native.GetWindowRect(t.Hwnd, &wr) == 0) continue;
-            float area = (float)wr.Width * wr.Height;
-            _grabs.Add(new Grab
-            {
-                H = t.Hwnd, T = t, M = _torMon!, OX = wr.Left, OY = wr.Top, LX = wr.Left, LY = wr.Top, Wd = wr.Width, Ht = wr.Height,
-                Mass = 1 + area / 350000f, ThrowAt = 3.5f + Rf() * 2.5f,
-            });
-        }
-    }
-
-    void StepGrabs(float dt)
-    {
-        if (_torOn && _torTouch > 0.45f && Now >= _grabScanAt) { _grabScanAt = Now + 0.1; ScanGrabs(); }
-        if (_grabs.Count == 0) return;
-        uint ms = (uint)(App.Seconds * 1000);
-        for (int i = _grabs.Count - 1; i >= 0; i--)
-        {
-            var g = _grabs[i];
-            // Closed, minimized, maximized or picked up by the user: it is theirs again, wherever it is.
-            if (Native.IsWindow(g.H) == 0 || Native.IsIconic(g.H) != 0 || Native.IsZoomed(g.H) != 0 || Tracker.Dragging == g.H) { _grabs.RemoveAt(i); continue; }
-            var b = g.M.Bounds;
-            float s = g.M.Scale;
-            float l = g.OX + g.Ox, t = g.OY + g.Oy;
-            float dx = 0;
-            g.Immune -= dt;
-            float k = _torMon == g.M && g.Immune <= 0 ? WindowInfluence(l, t, l + g.Wd, t + g.Ht, out dx) : 0;
-            if (k > 0.02f)
-            {
-                g.Calm = 0; g.Home = false;
-                float inv = 1 / g.Mass;
-                // Lifted toward about a third of the way down the funnel, pushed down if it rides higher than that.
-                float fy = ((t + g.Ht * 0.5f) - _torTop) / MathF.Max(1, _torGround - _torTop);
-                float lift = Math.Clamp((fy - 0.32f) * 2.6f, -0.7f, 1f);
-                g.Vx += (-dx * 14f * k + (Rf() - 0.5f) * 1500 * s * k) * inv * dt;
-                g.Vy += (-520 * s * k * lift + (Rf() - 0.5f) * 1100 * s * k) * inv * dt;
-                if (k > 0.3f) g.Held += dt;
-                // Held a few seconds, then thrown out of the side of the funnel.
-                if (g.Held > g.ThrowAt)
-                {
-                    float side = dx == 0 ? -_torDir : MathF.Sign(dx);
-                    if (side == _torDir) side = Rf() < 0.6f ? -_torDir : _torDir;
-                    g.Vx = side * (900 + 500 * Rf()) * s / MathF.Sqrt(g.Mass);
-                    g.Vy = -(200 + 250 * Rf()) * s / MathF.Sqrt(g.Mass);
-                    g.Immune = 2.5f; g.Held = 0; g.ThrowAt = 3.5f + Rf() * 2.5f;
-                }
-            }
-            else
-            {
-                g.Calm += dt;
-                if (g.Oy < 0) g.Vy += 900 * s * dt; // dropped: falls back to its own height
-                else if (g.Vy > 0) { g.Oy = MathF.Min(g.Oy, 0); g.Vy *= -0.25f; }
-                if (g.Calm > 3f) g.Home = true;
-            }
-            if (g.Home)
-            {
-                float e = MathF.Exp(-dt * 3.5f);
-                g.Ox *= e; g.Oy *= e; g.Vx = g.Vy = 0;
-                if (MathF.Abs(g.Ox) < 1.5f && MathF.Abs(g.Oy) < 1.5f) { g.Ox = g.Oy = 0; }
-            }
-            else
-            {
-                float damp = MathF.Exp(-dt * 1.8f);
-                g.Vx = Math.Clamp(g.Vx * damp, -1600 * s, 1600 * s);
-                g.Vy = Math.Clamp(g.Vy * damp, -1600 * s, 1600 * s);
-                g.Ox += g.Vx * dt; g.Oy += g.Vy * dt;
-                // Keep the title bar on the screen: never above the top, never lost off a side or under the taskbar.
-                float x = g.OX + g.Ox, y = g.OY + g.Oy;
-                float minX = b.Left - g.Wd * 0.5f, maxX = b.Right - g.Wd * 0.5f, minY = b.Top, maxY = _torMon == g.M ? _torGround - 90 * s : b.Bottom - 120 * s;
-                if (x < minX) { g.Ox = minX - g.OX; g.Vx = MathF.Abs(g.Vx) * 0.3f; }
-                if (x > maxX) { g.Ox = maxX - g.OX; g.Vx = -MathF.Abs(g.Vx) * 0.3f; }
-                if (y < minY) { g.Oy = minY - g.OY; g.Vy = MathF.Abs(g.Vy) * 0.3f; }
-                if (y > MathF.Max(minY, maxY)) { g.Oy = MathF.Max(minY, maxY) - g.OY; g.Vy = -MathF.Abs(g.Vy) * 0.3f; }
-            }
-            int nx = g.OX + (int)MathF.Round(g.Ox), ny = g.OY + (int)MathF.Round(g.Oy);
-            if (nx != g.LX || ny != g.LY)
-            {
-                Native.SetWindowPos(g.H, 0, nx, ny, 0, 0, MoveFlags);
-                g.LX = nx; g.LY = ny;
-                if (g.T != null && Tracker.ByHwnd.ContainsKey(g.H)) Tracker.UpdateRect(g.T, ms);
-            }
-            if (g.Home && g.Ox == 0 && g.Oy == 0) _grabs.RemoveAt(i);
-        }
-        Kick(0.2);
-    }
-
-    /// <summary>Put every borrowed window back where it was, right now (pausing, quitting).</summary>
-    public void RestoreWindows()
-    {
-        foreach (var g in _grabs)
-            if (Native.IsWindow(g.H) != 0 && Native.IsIconic(g.H) == 0 && Native.IsZoomed(g.H) == 0 && (g.LX != g.OX || g.LY != g.OY))
-                Native.SetWindowPos(g.H, 0, g.OX, g.OY, 0, 0, MoveFlags & ~0x4000u);
-        _grabs.Clear();
-        _torOn = false;
     }
 
     // ------------------------------------------------------------------ drawing

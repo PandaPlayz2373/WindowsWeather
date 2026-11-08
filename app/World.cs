@@ -19,7 +19,7 @@ public sealed class Monitor
 /// <summary>How much of each effect is on screen. Crossfaded towards the target over ~10 s.</summary>
 public struct Mix
 {
-    public float Snow, Rain, Haze, Wisps, Glow, Night, Storm, Low, Mid, High, Fog, Leaves, Frost, Hail, Aurora, Smog, Tornado;
+    public float Snow, Rain, Haze, Wisps, Glow, Night, Storm, Low, Mid, High, Fog, Leaves, Frost, Hail, Aurora, Smog, Tornado, Quake, Flood;
     public static Mix Lerp(Mix a, Mix b, float t) => new()
     {
         Snow = a.Snow + (b.Snow - a.Snow) * t, Rain = a.Rain + (b.Rain - a.Rain) * t, Haze = a.Haze + (b.Haze - a.Haze) * t,
@@ -27,7 +27,7 @@ public struct Mix
         Storm = a.Storm + (b.Storm - a.Storm) * t, Low = a.Low + (b.Low - a.Low) * t, Mid = a.Mid + (b.Mid - a.Mid) * t,
         High = a.High + (b.High - a.High) * t, Fog = a.Fog + (b.Fog - a.Fog) * t, Leaves = a.Leaves + (b.Leaves - a.Leaves) * t,
         Frost = a.Frost + (b.Frost - a.Frost) * t, Hail = a.Hail + (b.Hail - a.Hail) * t, Aurora = a.Aurora + (b.Aurora - a.Aurora) * t, Smog = a.Smog + (b.Smog - a.Smog) * t,
-        Tornado = a.Tornado + (b.Tornado - a.Tornado) * t,
+        Tornado = a.Tornado + (b.Tornado - a.Tornado) * t, Quake = a.Quake + (b.Quake - a.Quake) * t, Flood = a.Flood + (b.Flood - a.Flood) * t,
     };
     public readonly float MaxDiff(Mix b)
     {
@@ -35,7 +35,7 @@ public struct Mix
         void D(float x, float y) { float d = MathF.Abs(x - y); if (d > m) m = d; }
         D(Snow, b.Snow); D(Rain, b.Rain); D(Haze, b.Haze); D(Wisps, b.Wisps); D(Glow, b.Glow); D(Night, b.Night); D(Storm, b.Storm);
         D(Low, b.Low); D(Mid, b.Mid); D(High, b.High); D(Fog, b.Fog); D(Leaves, b.Leaves);
-        D(Frost, b.Frost); D(Hail, b.Hail); D(Aurora, b.Aurora); D(Smog, b.Smog); D(Tornado, b.Tornado);
+        D(Frost, b.Frost); D(Hail, b.Hail); D(Aurora, b.Aurora); D(Smog, b.Smog); D(Tornado, b.Tornado); D(Quake, b.Quake); D(Flood, b.Flood);
         return m;
     }
     public readonly bool Any => Snow > 0.001f || Rain > 0.001f || Haze > 0.001f || Wisps > 0.001f || Glow > 0.001f || Night > 0.001f || Storm > 0.001f;
@@ -226,6 +226,10 @@ public sealed partial class World
         UpdateCursor(dt);
         StepGusts(dt);
         StepTornado(dt);
+        StepQuake(dt);
+        StepFlood(dt);
+        StepGrabs(dt);
+        StepTiles(dt);
         StepFlakes(dt);
         StepLeaves(dt);
         StepHail(dt);
@@ -367,7 +371,7 @@ public sealed partial class World
             f.X += (WindX * s * (0.6f + f.Size * 0.06f) + GustX * s * 0.9f + sway) * dt;
             if (f.X < m.Bounds.Left - 10) f.X += m.Bounds.Width + 20;
             else if (f.X > m.Bounds.Right + 10) f.X -= m.Bounds.Width + 20;
-            bool dead = f.Y > f.Bottom;
+            bool dead = f.Y > f.Bottom || (_flLevel > 0 && f.Y > FloodY(Monitors[Math.Min(f.Mon, Monitors.Count - 1)], f.X));
             if (!dead && Land(spans, f.X, oy, f.Y, f.Size * s)) dead = true;
             if (dead) { _flakes[i] = _flakes[--_nFlakes]; i--; }
         }
@@ -380,7 +384,7 @@ public sealed partial class World
         int mi = PickMonitor();
         var m = Monitors[mi];
         float s = m.Scale;
-        float size = 3.0f + MathF.Pow(Rf(), 2.0f) * 7.0f; // mostly small, a few big
+        float size = (3.0f + MathF.Pow(Rf(), 2.0f) * 7.0f) * Mod("Snow.Size"); // mostly small, a few big
         _flakes[_nFlakes++] = new Flake
         {
             X = m.Bounds.Left + Rf() * m.Bounds.Width,
@@ -477,7 +481,7 @@ public sealed partial class World
     void Relax(Tracked w, float dt)
     {
         var h = w.H; int n = h.Length;
-        float max = 14 * w.Scale * PileScale, slope = 1.25f * w.Scale * (w.ColW / 3f), end = 1.6f * w.Scale;
+        float max = 14 * w.Scale * PileScale * Mod("Snow.Piles"), slope = 1.25f * w.Scale * (w.ColW / 3f), end = 1.6f * w.Scale;
         float kk = Math.Min(1, dt * 12);
         for (int i = 0; i < n - 1; i++)
         {
@@ -527,6 +531,7 @@ public sealed partial class World
             if (d.X < m.Bounds.Left - 20) d.X += m.Bounds.Width + 40;
             else if (d.X > m.Bounds.Right + 20) d.X -= m.Bounds.Width + 40;
             bool dead = d.Y > d.Bottom;
+            if (!dead && _flLevel > 0 && d.Y > FloodY(m, d.X)) { dead = true; if (_rnd.Next(6) == 0) AddRipple(d.X, FloodY(m, d.X), m.Scale); }
             if (!dead)
                 foreach (var s in spans)
                 {
@@ -542,7 +547,7 @@ public sealed partial class World
                     {
                         int col = Math.Clamp((int)((d.X - w.R.Left) / w.ColW), 0, w.Wt.Length - 1);
                         if (w.Wt[col] > 0.5f && _rnd.Next(3) == 0) AddRipple(d.X, s.Y, m.Scale);
-                        DepositWater(w, col, 0.9f * m.Scale);
+                        DepositWater(w, col, 0.9f * m.Scale * Mod("Rain.Puddles"));
                     }
                     break;
                 }
@@ -567,7 +572,7 @@ public sealed partial class World
         {
             X = sx,
             Y = sy,
-            Vy = (950 + Rf() * 450) * s,
+            Vy = (950 + Rf() * 450) * s * Mod("Rain.Speed"),
             Len = (16 + Rf() * 20) * s,
             Alpha = 0.22f + Rf() * 0.22f,
             Bottom = m.Bounds.Bottom + 40,
@@ -605,14 +610,14 @@ public sealed partial class World
         {
             var m = Monitors[PickMonitor()];
             _twinkles.Add(new Twinkle { X = m.Bounds.Left + Rf() * m.Bounds.Width, Y = m.Bounds.Top + Rf() * m.Bounds.Height * 0.45f, Size = (10 + Rf() * 8) * m.Scale });
-            _nextTwinkle = Now + 9 + Rf() * 22;
+            _nextTwinkle = Now + (9 + Rf() * 22) / Mod("Night.Stars");
         }
         if (Cur.Storm > 0.3f && Now >= _nextFlash)
         {
             _flashT = Now;
             // Most flashes come with a visible bolt; the rest are sheet lightning inside the clouds.
             if (Monitors.Count > 0 && Rf() < 0.8f) MakeBolt(Monitors[PickMonitor()]);
-            _nextFlash = Now + 12 + Rf() * 28;
+            _nextFlash = Now + (12 + Rf() * 28) / Mod("Storm.Frequency");
         }
     }
 
@@ -622,7 +627,7 @@ public sealed partial class World
         if (t < 0 || t > 0.9) return 0;
         // One soft swell and fade: no strobing.
         float a = t < 0.08 ? (float)(t / 0.08) : (float)Math.Exp(-(t - 0.08) * 5);
-        return MathF.Max(a * 0.16f * Cur.Storm, BoltIntensity() * 0.2f);
+        return MathF.Max(a * 0.16f * Cur.Storm, BoltIntensity() * 0.2f) * MathF.Min(1.6f, Mod("Storm.Strength"));
     }
 
     public string Describe() =>
@@ -704,7 +709,7 @@ public sealed partial class World
 
         _lastSprites = _sprites.Count;
         bool flash = FlashAlpha() > 0.002f;
-        bool content = _sprites.Count > 0 || flash || FrostVisible(m);
+        bool content = _sprites.Count > 0 || flash || FrostVisible(m) || DisasterVisible(m);
         if (!content && !ov.HasContent) return; // already blank: nothing to present
 
         ctx.Target = ov.Target;
@@ -712,6 +717,7 @@ public sealed partial class World
         ctx.BeginDraw();
         ctx.Clear(new Color4(0, 0, 0, 0));
         ctx.Transform = Matrix3x2.CreateTranslation(-b.Left, -b.Top);
+        DrawTiles(gpu, m, cover: true);
         if (flash)
         {
             float fa = FlashAlpha();
@@ -740,6 +746,8 @@ public sealed partial class World
                 ctx.Transform = baseXf;
             }
         }
+        DrawTiles(gpu, m, cover: false);
+        DrawCracks(gpu, m);
         DrawBolt(gpu, m);
         DrawFrostLayers(ctx, m); // frost on top of everything
         ctx.Transform = Matrix3x2.Identity;
@@ -775,7 +783,7 @@ public sealed partial class World
             float elev = Math.Clamp(SunElev, 0, 60) / 60f;
             // Low sun is warmer and a little stronger; high sun is a paler, whiter light.
             float wr = 1f, wg = 0.80f + 0.12f * elev, wb = 0.58f + 0.24f * elev;
-            float strength = Cur.Glow * (0.55f + 0.15f * (1 - elev)) * (1 - 0.45f * Cur.Smog);
+            float strength = Cur.Glow * (0.55f + 0.15f * (1 - elev)) * (1 - 0.45f * Cur.Smog) * Mod("Sun.Glow");
             float side = Math.Clamp(SunX * 1.6f, -1, 1); // which end of each edge faces the sun
             foreach (var w in Tracker.Z)
             {
@@ -918,5 +926,8 @@ public sealed partial class World
             float r = t.Size * (0.7f + 0.3f * MathF.Sin(p * MathF.PI));
             sp.Add(Atlas.Glint, t.X - r, t.Y - r, t.X + r, t.Y + r, new Color4(1, 1, 1, a));
         }
+
+        // Flood water in front of everything on the desktop.
+        AddFloodSprites(m);
     }
 }

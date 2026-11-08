@@ -57,11 +57,13 @@ public sealed class Settings
     public bool RestOnBatterySaver { get; set; } = true;
     public bool LighterOnBattery { get; set; } = true;  // 20 fps when unplugged
     public bool Online { get; set; } = true;            // off: no network at all (no location, no weather lookups)
+    public Dictionary<string, float> Mods { get; set; } = new(); // per-effect modifiers ("Storm.Frequency" = 1.5)
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(Settings))]
 [JsonSerializable(typeof(CachedState))]
+[JsonSerializable(typeof(Dictionary<string, float>))]
 internal partial class JsonCtx : JsonSerializerContext { }
 
 public static class Store
@@ -473,6 +475,8 @@ public static class WeatherService
         "Storm" => new Mix { Rain = 0.9f, Storm = 1f, Haze = 0.45f, Low = 1f, Mid = 0.6f },
         "Hail" => new Mix { Hail = 1f, Rain = 0.35f, Low = 0.9f, Mid = 0.4f },
         "Tornado" => new Mix { Tornado = 1f, Rain = 0.35f, Storm = 0.6f, Haze = 0.5f, Low = 1f, Mid = 0.6f, Leaves = 0.5f },
+        "Earthquake" => new Mix { Quake = 1f, Haze = 0.15f, Mid = 0.2f },
+        "Flood" => new Mix { Flood = 1f, Rain = 0.7f, Haze = 0.4f, Low = 1f, Mid = 0.5f },
         "Frost" => new Mix { Frost = 1f, High = 0.2f },
         "Aurora" => new Mix { Aurora = 1f, Night = 0.6f },
         _ => new Mix(),

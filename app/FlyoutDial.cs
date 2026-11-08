@@ -201,11 +201,24 @@ public sealed unsafe partial class Flyout
         y += 34;
         const int cols = 7;
         float gap = 6, cw = (iw - gap * (cols - 1)) / cols, ch = 54;
-        string[] glyphs = { "🌤️", "❄️", "🌧️", "☁️", "🌫️", "☀️", "🌇", "🍂", "🌙", "⛈️", "🧊", "🌪️", "🥶", "🌌", "" };
+        // Two sections : the ambient weather, then the disasters, which move real windows.
+        if (draw) Text("Ambient weather", _label, new Rect(Pad, y, iw, 16), Fg(0.62f));
+        y += 22;
+        float secY = y;
+        int ambient = App.FirstDisaster;
+        int disasters = App.EffectNames.Length - ambient;
+        float disY = secY + RowsH(ambient, cols, ch, gap) + 14;
+        if (draw)
+        {
+            Text("Disasters", _label, new Rect(Pad, disY, iw, 16), Fg(0.62f));
+            Text("move your windows, then put them back", _small, new Rect(Pad + 70, disY, iw - 70, 16), Fg(0.45f));
+        }
+        disY += 22;
         for (int i = 0; i < App.EffectNames.Length; i++)
         {
-            int col = i % cols, row = i / cols;
-            var r = new Rect(Pad + col * (cw + gap), y + row * (ch + gap), cw, ch);
+            int k = i < ambient ? i : i - ambient;
+            int col = k % cols, row = k / cols;
+            var r = new Rect(Pad + col * (cw + gap), (i < ambient ? secY : disY) + row * (ch + gap), cw, ch);
             if (!draw) continue;
             var id = Id.Chip0 + i;
             _hit[id] = r;
@@ -213,14 +226,30 @@ public sealed unsafe partial class Flyout
             Fill(r, 6, Fg((_light ? 0.035f : 0.045f) + hov * 0.05f));
             if (sel > 0.01f) Fill(r, 6, Acc(sel));
             var tc = sel > 0.5f ? C(_accentText.R, _accentText.G, _accentText.B, _accentText.A) : Fg(0.88f);
-            if (glyphs[i].Length > 0) Text(glyphs[i], _emoji, new Rect(r.Left, r.Top + 4, r.Width, 26), Fg(1));
+            if (App.GlyphFor(App.EffectNames[i]).Length > 0) Text(App.GlyphFor(App.EffectNames[i]), _emoji, new Rect(r.Left, r.Top + 4, r.Width, 26), Fg(1));
             else Text("", _iconCenter, new Rect(r.Left, r.Top + 4, r.Width, 26), tc);
-            Text(App.EffectNames[i], _smallCenter, new Rect(r.Left, r.Top + 31, r.Width, 18), tc);
+            Text(App.EffectNames[i] == "Earthquake" ? "Quake" : App.EffectNames[i], _smallCenter, new Rect(r.Left, r.Top + 31, r.Width, 18), tc);
         }
-        int rows = (App.EffectNames.Length + cols - 1) / cols;
-        y += ch * rows + gap * (rows - 1) + Pad;
-        return y;
+        y = disY + RowsH(disasters, cols, ch, gap) + 16;
+
+        // Modifiers for the chosen effect.
+        string eff = App.CurrentSettings.Effect;
+        var mods = App.ModsFor(eff);
+        if (mods.Length > 0)
+        {
+            if (draw) Text("Adjust " + eff, _label, new Rect(Pad, y, iw, 16), Fg(0.62f));
+            y += 22;
+            for (int i = 0; i < mods.Length; i++)
+            {
+                var r = new Rect(Pad, y, iw, 28);
+                if (draw) DrawSlider(Id.Slider0 + 10 + i, r, mods[i].key, mods[i].label);
+                y += 30;
+            }
+        }
+        return y + Pad - 6;
     }
+
+    static float RowsH(int n, int cols, float ch, float gap) { int rows = (n + cols - 1) / cols; return rows * ch + (rows - 1) * gap; }
 
     void BackButton(Rect r)
     {

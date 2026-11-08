@@ -103,6 +103,7 @@ public static unsafe partial class Native
     [DllImport(U)] public static extern nint DefWindowProcW(nint h, uint m, nuint w, nint l);
     [DllImport(U)] public static extern int DestroyWindow(nint h);
     [DllImport(U)] public static extern int ShowWindow(nint h, int cmd);
+    [DllImport(U)] public static extern int ShowWindowAsync(nint h, int cmd);
     [DllImport(U)] public static extern int SetWindowPos(nint h, nint after, int x, int y, int cx, int cy, uint flags);
     [DllImport(U)] public static extern int PeekMessageW(MSG* m, nint h, uint min, uint max, uint remove);
     [DllImport(U)] public static extern int TranslateMessage(MSG* m);
@@ -182,7 +183,7 @@ public static unsafe partial class Native
     [DllImport("kernel32.dll")] public static extern int SetWaitableTimer(nint h, long* due, int period, nint completion, nint arg, int resume);
     [DllImport("kernel32.dll")] public static extern int CancelWaitableTimer(nint h);
     [DllImport("kernel32.dll")] public static extern nint GetModuleHandleW(char* name);
-    [DllImport("kernel32.dll")] public static extern nint CreateMutexW(nint attrs, int owner, char* name);
+    [DllImport("kernel32.dll", SetLastError = true)] public static extern nint CreateMutexW(nint attrs, int owner, char* name);
     [DllImport("kernel32.dll")] public static extern int CloseHandle(nint h);
     [DllImport("kernel32.dll")] public static extern nint GetCurrentProcess();
     [DllImport("kernel32.dll")] public static extern int K32EmptyWorkingSet(nint proc);

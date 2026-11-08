@@ -20,7 +20,8 @@ file, about 8 MB, nothing to install).
    **More info**, then **Run anyway**. Some antivirus programs also check a new app for a few minutes the first
    time it runs.
 3. A small window icon appears in the tray (bottom-right, sometimes behind the **^** arrow). Click it for the
-   menu. It starts with Windows from then on; switch that off in the menu if you prefer.
+   menu. Can't find the icon? Double-click `WindowsWeather.exe` again and the settings open. It starts with Windows
+   from then on; switch that off in the menu if you prefer.
 
 Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 
@@ -40,9 +41,22 @@ Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 | Clear night | The real moon, in its real phase and place; an aurora on nights strong enough to see one from where you are |
 | Wind | Gusts push the snow, rain and leaves, and blow snow off the edges |
 | Poor air quality | A faint haze |
-| Tornado (pick it in the menu) | A funnel drops out of the clouds and crosses the screen. It picks up your windows, swings them around and throws them, and tears the snow, puddles and leaves off everything it crosses. Every window goes back exactly where it was a few seconds after it passes. Maximized and pinned-on-top windows are left alone, and grabbing a window yourself takes it back |
 
-The menu lets you preview any of these, adjust how much snow, rain, leaves and clouds you get, set a city by hand,
+
+**Disasters** (pick them in the menu; they never come on by themselves). They really move your windows, and always put
+them back: a few seconds after it's over every window glides back to exactly where it was, and straight away if you
+pause or quit. Maximized and always-on-top windows are left alone (except that a big quake knocks maximized windows out
+of maximized for a moment), and if you grab a window yourself it's yours again.
+
+| Disaster | What it does |
+|---|---|
+| Tornado | A funnel drops out of the clouds and crosses the screen, picks up your windows, swings them around and throws them, and tears the snow, puddles and leaves off everything it crosses |
+| Earthquake | A rumble, then the main shock: windows shake and walk, snow and leaves are shaken off, your taskbar icons jump off the taskbar, and a strong one cracks the screen (for a few seconds) |
+| Flood | Water rises from the bottom of the screen; windows float up and bob on it, taskbar icons float away, then it drains and everything settles back |
+
+Every effect has its own sliders in the effect picker: lightning frequency and strength for storms, density and height
+for clouds, flake size and pile height for snow, size, speed and power for the tornado, and so on. The menu also lets you
+preview any effect, adjust how much snow, rain, leaves and clouds you get, set a city by hand,
 scrub through the time of day, and see what the app is costing your computer right now.
 
 ## Light on your computer

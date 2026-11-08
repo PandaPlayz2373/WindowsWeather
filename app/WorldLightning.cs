@@ -56,7 +56,7 @@ public sealed partial class World
         _boltBlastPending = true;
 
         int forks = 0;
-        Walk(new Vector2(x0, y0), new Vector2(x1, y1), 2.6f * s, 1f, 9f * s, true, ref forks, s);
+        Walk(new Vector2(x0, y0), new Vector2(x1, y1), 2.6f * s * MathF.Sqrt(Mod("Storm.Strength")), 1f, 9f * s, true, ref forks, s);
     }
 
     // A random walk toward the target: each step drops a little and jinks sideways, pulled back toward the line.

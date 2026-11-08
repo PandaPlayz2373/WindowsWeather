@@ -46,8 +46,32 @@ public sealed unsafe partial class Flyout : IDisposable
     readonly Dictionary<Id, float> _hover = new(), _anim = new();
     Id _hot, _pressed, _drag;
     static readonly string[] SliderNames = { "Snow", "Rain", "Leaves", "Clouds" };
+    readonly Dictionary<Id, string> _sliderKeys = new(); // effect-picker sliders (Slider0 + 10 ..) -> setting key
 
-    static Rect SliderTrack(Rect row) => new(row.Left + 86, row.Top, row.Width - 86 - 52, row.Height);
+    /// <summary>One 0-200% slider row: label, track, Windows 11 thumb, percentage. key = the setting it changes.</summary>
+    void DrawSlider(Id id, Rect r, string key, string label)
+    {
+        _hit[id] = r;
+        if (id >= Id.Slider0 + 10) _sliderKeys[id] = key;
+        float v = App.AmountOf(key);              // 0..2
+        Text(label, _body, new Rect(r.Left, r.Top, 84, r.Height), Fg(0.88f));
+        var tr = SliderTrack(r);
+        float cy = r.Top + r.Height / 2, x = tr.Left + tr.Width * (Math.Clamp(v, 0, 2) / 2f);
+        Fill(new Rect(tr.Left, cy - 2, tr.Width, 4), 2, Fg(_light ? 0.18f : 0.22f));
+        Fill(new Rect(tr.Left, cy - 2, x - tr.Left, 4), 2, Acc());
+        // Windows 11 style thumb: a ring with an accent centre that grows on hover / while dragging.
+        float hv = MathF.Max(H(id), _drag == id ? 1 : 0);
+        _brush.Color = _light ? C(1, 1, 1, 1) : C(0.27f, 0.27f, 0.28f, 1);
+        _gpu.Ctx.FillEllipse(new Ellipse(new Vector2(x, cy), 10, 10), _brush);
+        _brush.Color = Fg(0.12f);
+        _gpu.Ctx.DrawEllipse(new Ellipse(new Vector2(x, cy), 10, 10), _brush, 1);
+        _brush.Color = Acc();
+        float ir = 5 + 1.5f * hv - (_drag == id ? 1 : 0);
+        _gpu.Ctx.FillEllipse(new Ellipse(new Vector2(x, cy), ir, ir), _brush);
+        Text($"{MathF.Round(v * 100)}%", _bodyRight, new Rect(tr.Right + 8, r.Top, r.Right - tr.Right - 8, r.Height), Fg(0.6f));
+    }
+
+    static Rect SliderTrack(Rect row) => new(row.Left + 92, row.Top, row.Width - 92 - 52, row.Height);
 
     void DragTo(int px)
     {
@@ -55,7 +79,8 @@ public sealed unsafe partial class Flyout : IDisposable
         var tr = SliderTrack(row);
         float v = Math.Clamp((px / _s - tr.Left) / tr.Width, 0, 1) * 2f;
         v = MathF.Round(v * 20) / 20f; // 5% steps
-        App.FlyoutCommand("amount", $"{SliderNames[_drag - Id.Slider0]}={v.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        string key = _sliderKeys.TryGetValue(_drag, out var k) ? k : SliderNames[_drag - Id.Slider0];
+        App.FlyoutCommand("amount", $"{key}={v.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
         Render();
     }
     bool _editing;
@@ -368,11 +393,8 @@ public sealed unsafe partial class Flyout : IDisposable
         ctx.Transform = Matrix3x2.CreateScale(_s);
         if (_view == View.Dial)
         {
-            DrawDial(slide * 0.6f);
-            ctx.Transform = Matrix3x2.Identity;
-            ctx.AntialiasMode = oldAa;
-            ctx.EndDraw();
-            ctx.Target = null;
+            try { DrawDial(slide * 0.6f); }
+            finally { ctx.Transform = Matrix3x2.Identity; ctx.AntialiasMode = oldAa; ctx.EndDraw(); ctx.Target = null; }
             _swap!.Present(1, PresentFlags.None);
             return;
         }
@@ -384,12 +406,19 @@ public sealed unsafe partial class Flyout : IDisposable
         Stroke(full, 8, Fg(_light ? 0.10f : 0.09f));
 
         ctx.Transform = Matrix3x2.CreateTranslation(0, slide) * Matrix3x2.CreateScale(_s);
-        if (_view == View.Effects) { _hit.Clear(); EffectsLayout(true); } else Layout(measureOnly: false);
-
-        ctx.Transform = Matrix3x2.Identity;
-        ctx.AntialiasMode = oldAa;
-        ctx.EndDraw();
-        ctx.Target = null;
+        try
+        {
+            if (_view == View.Effects) { _hit.Clear(); _sliderKeys.Clear(); EffectsLayout(true); } else Layout(measureOnly: false);
+        }
+        finally
+        {
+            // Always end the draw: the device context is shared with the weather overlay, and a draw left open
+            // stops the weather rendering too (D2DERR_WRONG_STATE).
+            ctx.Transform = Matrix3x2.Identity;
+            ctx.AntialiasMode = oldAa;
+            ctx.EndDraw();
+            ctx.Target = null;
+        }
         _swap!.Present(1, PresentFlags.None);
     }
 
@@ -428,7 +457,6 @@ public sealed unsafe partial class Flyout : IDisposable
         y += 22;
         const int cols = 7;
         float gap = 6, cw = (iw - gap * (cols - 1)) / cols, ch = 54;
-        string[] glyphs = { "🌤️", "❄️", "🌧️", "☁️", "🌫️", "☀️", "🌇", "🍂", "🌙", "⛈️", "🧊", "🥶", "🌌", "" };
         for (int i = 0; i < App.EffectNames.Length; i++)
         {
             int col = i % cols, row = i / cols;
@@ -441,7 +469,7 @@ public sealed unsafe partial class Flyout : IDisposable
             if (sel > 0.01f) Fill(r, 6, Acc(sel));
             if (_pressed == id) Fill(r, 6, Fg(0.04f));
             var tc = sel > 0.5f ? C(_accentText.R, _accentText.G, _accentText.B, _accentText.A) : Fg(0.88f);
-            if (glyphs[i].Length > 0) Text(glyphs[i], _emoji, new Rect(r.Left, r.Top + 5, r.Width, 28), Fg(1));
+            if (App.GlyphFor(App.EffectNames[i]).Length > 0) Text(App.GlyphFor(App.EffectNames[i]), _emoji, new Rect(r.Left, r.Top + 5, r.Width, 28), Fg(1));
             else Text("", _iconCenter, new Rect(r.Left, r.Top + 5, r.Width, 28), tc);
             Text(App.EffectNames[i], _smallCenter, new Rect(r.Left, r.Top + 34, r.Width, 18), tc);
         }
@@ -455,27 +483,7 @@ public sealed unsafe partial class Flyout : IDisposable
         for (int i = 0; i < names.Length; i++)
         {
             var r = new Rect(Pad, y, iw, 28);
-            if (draw)
-            {
-                var id = Id.Slider0 + i;
-                _hit[id] = r;
-                float v = App.AmountOf(names[i]);              // 0..2
-                Text(names[i], _body, new Rect(r.Left, r.Top, 80, r.Height), Fg(0.88f));
-                var tr = SliderTrack(r);
-                float cy = r.Top + r.Height / 2, x = tr.Left + tr.Width * (v / 2f);
-                Fill(new Rect(tr.Left, cy - 2, tr.Width, 4), 2, Fg(_light ? 0.18f : 0.22f));
-                Fill(new Rect(tr.Left, cy - 2, x - tr.Left, 4), 2, Acc());
-                // Windows 11 style thumb: a ring with an accent centre that grows on hover / while dragging.
-                float hv = MathF.Max(H(id), _drag == id ? 1 : 0);
-                _brush.Color = _light ? C(1, 1, 1, 1) : C(0.27f, 0.27f, 0.28f, 1);
-                _gpu.Ctx.FillEllipse(new Ellipse(new Vector2(x, cy), 10, 10), _brush);
-                _brush.Color = Fg(0.12f);
-                _gpu.Ctx.DrawEllipse(new Ellipse(new Vector2(x, cy), 10, 10), _brush, 1);
-                _brush.Color = Acc();
-                float ir = 5 + 1.5f * hv - (_drag == id ? 1 : 0);
-                _gpu.Ctx.FillEllipse(new Ellipse(new Vector2(x, cy), ir, ir), _brush);
-                Text($"{MathF.Round(v * 100)}%", _bodyRight, new Rect(tr.Right + 8, r.Top, r.Right - tr.Right - 8, r.Height), Fg(0.6f));
-            }
+            if (draw) DrawSlider(Id.Slider0 + i, r, names[i], names[i]);
             y += 28 + 2;
         }
         y += 10;
@@ -646,7 +654,11 @@ public sealed unsafe partial class Flyout : IDisposable
     void Activate(Id id)
     {
         var s = App.CurrentSettings;
-        if (id >= Id.Chip0 && id < Id.Chip0 + App.EffectNames.Length) App.FlyoutCommand("effect", App.EffectNames[id - Id.Chip0]);
+        if (id >= Id.Chip0 && id < Id.Chip0 + App.EffectNames.Length)
+        {
+            App.FlyoutCommand("effect", App.EffectNames[id - Id.Chip0]);
+            if (_view == View.Effects) PlaceWindow(); // the sliders below the chips change with the effect
+        }
         else switch (id)
         {
             case Id.Pause: App.FlyoutCommand("pause", ""); break;
@@ -703,7 +715,7 @@ public sealed unsafe partial class Flyout : IDisposable
             case 0x0201: // WM_LBUTTONDOWN
                 _pressed = HitTest((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF));
                 if (_editing && _pressed != Id.Location) CommitEdit();
-                if (_pressed >= Id.Slider0 && _pressed < Id.Slider0 + 4) { _drag = _pressed; Native.SetCapture(h); DragTo((short)(l & 0xFFFF)); return 0; }
+                if (_pressed >= Id.Slider0 && _pressed < Id.Slider0 + 20) { _drag = _pressed; Native.SetCapture(h); DragTo((short)(l & 0xFFFF)); return 0; }
                 if (_pressed == Id.Arc) { _drag = Id.Arc; Native.SetCapture(h); ArcTo((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF)); return 0; }
                 if (_pressed == Id.Amount) { _drag = Id.Amount; Native.SetCapture(h); AmountTo((short)((l >> 16) & 0xFFFF)); return 0; }
                 Kick();

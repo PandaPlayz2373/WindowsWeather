@@ -36,7 +36,7 @@ public sealed partial class World
     void StepFrost(float dt)
     {
         float target = Cur.Frost;
-        float rate = FastFrost ? 1f / 28f : target > _frost ? 1f / 240f : 1f / 50f;
+        float rate = FastFrost ? 1f / 28f : target > _frost ? Mod("Frost.Speed") / 240f : 1f / 50f;
         _frost = target > _frost ? MathF.Min(target, _frost + rate * dt) : MathF.Max(target, _frost - rate * dt);
         _frostGrowing = false;
         foreach (var m in Monitors)
@@ -140,7 +140,7 @@ public sealed partial class World
     void StepHail(float dt)
     {
         int target = 0;
-        foreach (var m in Monitors) target += (int)(70 * Cur.Hail * RainAmt * m.Bounds.Width / 1920f);
+        foreach (var m in Monitors) target += (int)(70 * Cur.Hail * RainAmt * Mod("Hail.Amount") * m.Bounds.Width / 1920f);
         if (_nHail < target)
         {
             _hailAcc += target / 1.2f * dt;
@@ -151,7 +151,7 @@ public sealed partial class World
                 int mi = PickMonitor(); var m = Monitors[mi]; float s = m.Scale;
                 float sx = m.Bounds.Left + Rf() * m.Bounds.Width, sy = m.Bounds.Top - 20 * s;
                 if (RainSource(mi, out float cx, out float cy)) { sx = cx; sy = cy; }
-                _hail[_nHail++] = new Hail { X = sx, Y = sy, Vx = (Rf() - .5f) * 40 * s, Vy = (650 + Rf() * 350) * s, Size = (3 + Rf() * 3.5f) * s, Bottom = m.Bounds.Bottom + 10, Mon = mi };
+                _hail[_nHail++] = new Hail { X = sx, Y = sy, Vx = (Rf() - .5f) * 40 * s, Vy = (650 + Rf() * 350) * s, Size = (3 + Rf() * 3.5f) * s * Mod("Hail.Size"), Bottom = m.Bounds.Bottom + 10, Mon = mi };
             }
         }
         else _hailAcc = 0;
@@ -245,7 +245,7 @@ public sealed partial class World
             float baseY = b.Top + b.Height * (0.20f + 0.045f * MathF.Sin(x * 0.0035f + t * 0.12f) + 0.02f * MathF.Sin(x * 0.011f - t * 0.23f));
             float h = b.Height * (0.13f + 0.07f * (0.5f + 0.5f * MathF.Sin(x * 0.006f + t * 0.31f + i)));
             float pulse = 0.55f + 0.45f * MathF.Sin(t * 0.7f + i * 0.9f) * MathF.Sin(t * 0.23f + i * 0.37f);
-            float k = Cur.Aurora * (0.10f + 0.12f * pulse);
+            float k = Cur.Aurora * (0.10f + 0.12f * pulse) * Mod("Aurora.Brightness");
             float w = step * 1.8f;
             _sprites.Add(Atlas.AuroraRay, x - w / 2, baseY - h, x + w / 2, baseY, Pm(0.35f, 1f, 0.58f, k));
             _sprites.Add(Atlas.AuroraRay, x - w / 2, baseY - h * 1.9f, x + w / 2, baseY - h * 0.75f, Pm(0.85f, 0.35f, 0.9f, k * 0.45f));

@@ -54,6 +54,9 @@ public static unsafe class App
         if (args.Contains("--strike")) { PostToRunning(WM_DUMP, 7); return 0; } // a lightning strike now (testing)
         if (args.Contains("--tornado")) { PostToRunning(WM_DUMP, 8); return 0; } // a tornado now (testing)
         if (args.Contains("--tornado-test")) { PostToRunning(WM_DUMP, 9); return 0; } // a tornado that only moves windows titled WWTest
+        if (args.Contains("--test-windows")) { PostToRunning(WM_DUMP, 12); return 0; } // disasters only touch windows titled WWTest
+        if (args.Contains("--quake")) { PostToRunning(WM_DUMP, 10); return 0; }   // an earthquake now (testing)
+        if (args.Contains("--flood")) { PostToRunning(WM_DUMP, 11); return 0; }   // a flood now (testing)
         if (args.Contains("--pause")) { PostToRunning(WM_SETPAUSE, 1); return 0; }
         if (args.Contains("--resume")) { PostToRunning(WM_SETPAUSE, 0); return 0; }
         foreach (var a in args)
@@ -64,7 +67,14 @@ public static unsafe class App
 
         nint mutex;
         fixed (char* n = "Local\\WindowsWeather.SingleInstance") mutex = Native.CreateMutexW(0, 1, n);
-        if (Marshal.GetLastWin32Error() == 183 /*ERROR_ALREADY_EXISTS*/) { Log.Write("already running; exiting"); return 0; }
+        if (Marshal.GetLastWin32Error() == 183 /*ERROR_ALREADY_EXISTS*/)
+        {
+            // Opened again while it is running (the tray icon is often hidden under the ^ arrow on a new install):
+            // show the settings instead of silently doing nothing.
+            Log.Write("already running; opening its settings");
+            PostToRunning(WM_MENU, 3);
+            return 0;
+        }
 
         HInstance = Native.GetModuleHandleW(null);
         ReadAcLine();
@@ -538,13 +548,39 @@ public static unsafe class App
 
     internal static float AmountOf(string name) => name switch
     {
-        "Snow" => S.SnowAmount, "Rain" => S.RainAmount, "Leaves" => S.LeafAmount, "Clouds" => S.CloudAmount, _ => 1,
+        "Snow" => S.SnowAmount, "Rain" => S.RainAmount, "Leaves" => S.LeafAmount, "Clouds" => S.CloudAmount,
+        _ => S.Mods.TryGetValue(name, out var v) ? v : 1,
+    };
+
+    /// <summary>The sliders the effect picker shows for an effect ("weather modifiers. like in storm i can
+    /// change lightning frequency or strength. in clouds the density or the height on the screen"). Keys without a dot
+    /// are the old amounts; the rest are World.Mod() keys. All are 0-200%, 100% = normal.</summary>
+    internal static (string key, string label)[] ModsFor(string effect) => effect switch
+    {
+        "Live" => [("Snow", "Snow"), ("Rain", "Rain"), ("Leaves", "Leaves"), ("Clouds", "Clouds")],
+        "Snow" => [("Snow", "Amount"), ("Snow.Size", "Flake size"), ("Snow.Piles", "Pile height")],
+        "Rain" => [("Rain", "Amount"), ("Rain.Speed", "Drop speed"), ("Rain.Puddles", "Puddles")],
+        "Clouds" => [("Clouds", "Density"), ("Clouds.Height", "Height")],
+        "Fog" => [("Fog.Thickness", "Thickness")],
+        "Sun" => [("Sun.Glow", "Glow")],
+        "Sunset" => [("Sunset.Colour", "Colour"), ("Clouds", "Clouds")],
+        "Leaves" => [("Leaves", "Amount"), ("Leaves.Wind", "Wind")],
+        "Night" => [("Night.Stars", "Twinkles")],
+        "Storm" => [("Storm.Frequency", "Lightning"), ("Storm.Strength", "Strength"), ("Rain", "Rain")],
+        "Hail" => [("Hail.Amount", "Amount"), ("Hail.Size", "Size")],
+        "Frost" => [("Frost.Speed", "Growth")],
+        "Aurora" => [("Aurora.Brightness", "Brightness")],
+        "Tornado" => [("Tornado.Size", "Size"), ("Tornado.Speed", "Speed"), ("Tornado.Power", "Power")],
+        "Earthquake" => [("Earthquake.Magnitude", "Magnitude"), ("Earthquake.Frequency", "How often")],
+        "Flood" => [("Flood.Height", "Water height"), ("Flood.Waves", "Waves")],
+        _ => [],
     };
 
     static void ApplyAmounts()
     {
         W.SnowAmt = Math.Clamp(S.SnowAmount, 0, 2); W.RainAmt = Math.Clamp(S.RainAmount, 0, 2);
         W.LeafAmt = Math.Clamp(S.LeafAmount, 0, 2); W.CloudAmt = Math.Clamp(S.CloudAmount, 0, 2);
+        W.Mods = S.Mods ?? new();
     }
 
     internal static void FlyoutCommand(string kind, string value)
@@ -559,7 +595,12 @@ public static unsafe class App
                 if (eq > 0 && float.TryParse(value[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v))
                 {
                     v = Math.Clamp(v, 0, 2);
-                    switch (value[..eq]) { case "Snow": S.SnowAmount = v; break; case "Rain": S.RainAmount = v; break; case "Leaves": S.LeafAmount = v; break; case "Clouds": S.CloudAmount = v; break; }
+                    switch (value[..eq])
+                    {
+                        case "Snow": S.SnowAmount = v; break; case "Rain": S.RainAmount = v; break;
+                        case "Leaves": S.LeafAmount = v; break; case "Clouds": S.CloudAmount = v; break;
+                        case var k when k.Contains('.'): S.Mods[k] = v; break;
+                    }
                     ApplyAmounts();
                     W.Kick(0.5);
                     Native.PostMessageW(_msgHwnd, WM_KICK, 0, 0);
@@ -595,11 +636,28 @@ public static unsafe class App
 
     static void ToggleFlyout()
     {
-        if (_gpu == null) return;
+        if (_gpu == null) { ShowMenu(); return; }
         // A click on the tray icon first deactivates (closes) an open flyout; don't reopen it on the same click.
         if (_flyout is { Visible: false } && Seconds - _flyoutClosedAt < 0.35) return;
-        _flyout ??= new Flyout(_gpu);
-        _flyout.Toggle();
+        try { _flyout ??= new Flyout(_gpu); _flyout.Toggle(); }
+        catch (Exception e) { FlyoutFailed(e); }
+    }
+
+    /// <summary>Open the panel at a view (0 dial, 1 effects, 2 settings); the plain menu if the panel cannot open.</summary>
+    static void OpenFlyoutView(int view)
+    {
+        if (_gpu == null) { ShowMenu(); return; }
+        try { _flyout ??= new Flyout(_gpu); _flyout.ShowView(view); }
+        catch (Exception e) { FlyoutFailed(e); }
+    }
+
+    // The modern panel failed on this machine: log why and fall back to the plain menu so settings are always reachable.
+    static void FlyoutFailed(Exception e)
+    {
+        Log.Write("flyout failed, showing the plain menu: " + e);
+        try { _flyout?.Dispose(); } catch { }
+        _flyout = null;
+        ShowMenu();
     }
 
     static void CreateHostWindow()
@@ -682,7 +740,16 @@ public static unsafe class App
         IntLight = 130, IntMed, IntHeavy, Fps30 = 140, Fps60, LocAuto = 150, LocCity, Capture = 160, Startup, ClearSnow, Refresh, Saver, Quit = 199,
     }
 
-    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Hail", "Tornado", "Frost", "Aurora", "Off" };
+    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Hail", "Frost", "Aurora", "Off", "Tornado", "Earthquake", "Flood" };
+    // One place for every effect's icon, so a new effect can never leave a picker short (1.0.3 crashed the settings
+    // page: it had its own 14-icon list and Tornado made 15).
+    internal static string GlyphFor(string effect) => effect switch
+    {
+        "Live" => "🌤️", "Snow" => "❄️", "Rain" => "🌧️", "Clouds" => "☁️", "Fog" => "🌫️", "Sun" => "☀️", "Sunset" => "🌇",
+        "Leaves" => "🍂", "Night" => "🌙", "Storm" => "⛈️", "Hail" => "🧊", "Frost" => "🥶", "Aurora" => "🌌",
+        "Tornado" => "🌪️", "Earthquake" => "🏚️", "Flood" => "🌊", _ => "",
+    };
+    internal const int FirstDisaster = 14; // Effects from here on are disasters (shown in their own section)
 
     static void Append(nint menu, uint flags, Cmd id, string text) { fixed (char* t = text) Native.AppendMenuW(menu, flags, (nuint)id, t); }
     static void AppendSub(nint menu, nint sub, string text) { fixed (char* t = text) Native.AppendMenuW(menu, Native.MF_POPUP, (nuint)sub, t); }
@@ -741,7 +808,7 @@ public static unsafe class App
         switch (c)
         {
             case Cmd.Pause: S.Paused = !S.Paused; break;
-            case >= Cmd.EffLive and <= (Cmd)123:
+            case >= Cmd.EffLive and < Cmd.IntLight when c - Cmd.EffLive < Effects.Length: // every effect, however many
                 S.Effect = Effects[c - Cmd.EffLive];
                 ApplyWeather(initial: false);
                 break;
@@ -801,7 +868,7 @@ public static unsafe class App
                     return 0;
                 case WM_MENU:
                     if (w == 0) ToggleFlyout();
-                    else { if (_gpu == null) return 0; _flyout ??= new Flyout(_gpu); _flyout.ShowView((int)w - 1); }
+                    else OpenFlyoutView((int)w - 1);
                     return 0;
                 case WM_SETEFFECT:
                     if ((int)w < Effects.Length) OnCommand(Cmd.EffLive + (uint)w);
@@ -810,6 +877,9 @@ public static unsafe class App
                     if (w == 7) { W.StrikeNow(); return 0; }
                     if (w == 8) { W.GrabOnlyTitle = null; W.TornadoNow(); return 0; }
                     if (w == 9) { W.GrabOnlyTitle = "WWTest"; W.TornadoNow(); return 0; }
+                    if (w == 10) { W.QuakeNow(); return 0; }
+                    if (w == 11) { W.FloodNow(); return 0; }
+                    if (w == 12) { W.GrabOnlyTitle = "WWTest"; return 0; }
                     Log.Write($"DUMP paused={Paused} (user={S.Paused} full={_pFull} locked={_pLocked} displayOff={_pDisplayOff} saver={_pSaver}) effect={S.Effect} frames={_frames} fps={W.DesiredFps(MaxFps())} events={Tracker.EventCount} cursorEvents={Tracker.CursorEvents}");
                     Log.Write("DUMP " + W.Describe());
                     Log.Write("DUMP prof " + W.ProfileText());
@@ -825,7 +895,7 @@ public static unsafe class App
                     {
                         // First run: open the menu at its settings page, where the privacy notice and the online switch are.
                         Native.KillTimer(_msgHwnd, TIMER_FIRSTRUN);
-                        if (_gpu != null) { _flyout ??= new Flyout(_gpu); _flyout.ShowView(2); }
+                        OpenFlyoutView(2);
                     }
                     return 0;
                 case Native.WM_DISPLAYCHANGE:
