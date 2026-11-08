@@ -29,7 +29,7 @@ Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 | Outside | On your desktop |
 |---|---|
 | Snow | Flakes fall and pile up on window tops, the taskbar and notification pop-ups; heavier snowfall means more flakes, deeper snow on the ground means taller piles |
-| Rain, drizzle, storms | Rain falls from the clouds, splashes, and pools into puddles on window tops; storms add a soft flash |
+| Rain, drizzle, storms | Rain falls from the clouds, splashes, and pools into puddles on window tops; storms add lightning strikes that fork down from the clouds and knock the snow and water off whatever they hit |
 | Hail | Pellets that bounce off window tops |
 | Clouds | Low, mid and high clouds drawn at their real heights; the cursor pushes them aside and they drift back together |
 | Fog | A soft layer over the whole screen, as thick as the real visibility |

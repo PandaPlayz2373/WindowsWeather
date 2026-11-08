@@ -234,6 +234,7 @@ public sealed partial class World
         StepClouds(dt);
         StepWater(dt);
         StepSkies(dt);
+        StepLightning();
     }
 
     void UpdateCursor(float dt)
@@ -606,7 +607,9 @@ public sealed partial class World
         if (Cur.Storm > 0.3f && Now >= _nextFlash)
         {
             _flashT = Now;
-            _nextFlash = Now + 25 + Rf() * 45;
+            // Most flashes come with a visible bolt; the rest are sheet lightning inside the clouds.
+            if (Monitors.Count > 0 && Rf() < 0.8f) MakeBolt(Monitors[PickMonitor()]);
+            _nextFlash = Now + 12 + Rf() * 28;
         }
     }
 
@@ -616,7 +619,7 @@ public sealed partial class World
         if (t < 0 || t > 0.9) return 0;
         // One soft swell and fade: no strobing.
         float a = t < 0.08 ? (float)(t / 0.08) : (float)Math.Exp(-(t - 0.08) * 5);
-        return a * 0.16f * Cur.Storm;
+        return MathF.Max(a * 0.16f * Cur.Storm, BoltIntensity() * 0.2f);
     }
 
     public string Describe() =>
@@ -632,6 +635,7 @@ public sealed partial class World
         if (_nFlakes > 0 || _nDrops > 0 || _nDebris > 0 || Cur.Snow > 0.01f || Cur.Rain > 0.01f || Cur.Storm > 0.01f) return maxFps;
         if (Now < ActiveUntil) return maxFps;
         if (Now - LastCursorMove < 0.4) return maxFps;
+        if (BoltIntensity() > 0) return maxFps;
         if (_twinkles.Count > 0 || Now - _flashT < 1) return Math.Min(30, maxFps);
         if (Cur.MaxDiff(Target) > 0) return 15;
         if (_ripples.Count > 0) return maxFps;
@@ -691,6 +695,7 @@ public sealed partial class World
         UpdateMoonTexture(gpu);
         UpdateFrostLayers(gpu, m);
         BuildSprites(m);
+        AddLightningSprites(m);
         long q1 = System.Diagnostics.Stopwatch.GetTimestamp();
         ProfBuild += q1 - q0;
 
@@ -732,6 +737,7 @@ public sealed partial class World
                 ctx.Transform = baseXf;
             }
         }
+        DrawBolt(gpu, m);
         DrawFrostLayers(ctx, m); // frost on top of everything
         ctx.Transform = Matrix3x2.Identity;
         long q3 = System.Diagnostics.Stopwatch.GetTimestamp();

@@ -51,6 +51,7 @@ public static unsafe class App
     {
         if (args.Contains("--quit")) { QuitRunning(); return 0; }
         if (args.Contains("--dump")) { PostToRunning(WM_DUMP); return 0; }
+        if (args.Contains("--strike")) { PostToRunning(WM_DUMP, 7); return 0; } // a lightning strike now (testing)
         if (args.Contains("--pause")) { PostToRunning(WM_SETPAUSE, 1); return 0; }
         if (args.Contains("--resume")) { PostToRunning(WM_SETPAUSE, 0); return 0; }
         foreach (var a in args)
@@ -803,6 +804,7 @@ public static unsafe class App
                     if ((int)w < Effects.Length) OnCommand(Cmd.EffLive + (uint)w);
                     return 0;
                 case WM_DUMP:
+                    if (w == 7) { W.StrikeNow(); return 0; }
                     Log.Write($"DUMP paused={Paused} (user={S.Paused} full={_pFull} locked={_pLocked} displayOff={_pDisplayOff} saver={_pSaver}) effect={S.Effect} frames={_frames} fps={W.DesiredFps(MaxFps())} events={Tracker.EventCount} cursorEvents={Tracker.CursorEvents}");
                     Log.Write("DUMP " + W.Describe());
                     Log.Write("DUMP prof " + W.ProfileText());
