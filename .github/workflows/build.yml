@@ -1,0 +1,66 @@
+# Builds WindowsWeather.exe on GitHub's own Windows machines from this repo's source, so every download can be traced
+# to a commit. On a published release it attaches the exe to that release.
+#
+# Code signing (SignPath, free for open source): the "Sign" step stays off until the repo has the secret
+# SIGNPATH_API_TOKEN and the variable SIGNPATH_ORGANIZATION_ID. Once SignPath has approved the project, add those two
+# in Settings > Secrets and variables > Actions and every release is signed automatically.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build the exe (Native AOT, one file)
+        run: dotnet publish app/WindowsWeather.csproj -c Release -r win-x64 -o out
+
+      - name: SHA-256
+        shell: pwsh
+        run: (Get-FileHash out/WindowsWeather.exe -Algorithm SHA256).Hash | Tee-Object out/WindowsWeather.exe.sha256
+
+      - name: Keep the build
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsWeather
+          path: out/WindowsWeather.exe
+          if-no-files-found: error
+
+      - name: Sign (SignPath)
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: WindowsWeather
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Attach to the release
+        if: ${{ github.event_name == 'release' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = if (Test-Path signed/WindowsWeather.exe) { "signed/WindowsWeather.exe" } else { "out/WindowsWeather.exe" }
+          gh release upload "${{ github.event.release.tag_name }}" $exe --clobber
