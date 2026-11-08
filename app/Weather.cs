@@ -56,6 +56,7 @@ public sealed class Settings
     public bool Paused { get; set; }
     public bool RestOnBatterySaver { get; set; } = true;
     public bool LighterOnBattery { get; set; } = true;  // 20 fps when unplugged
+    public bool Online { get; set; } = true;            // off: no network at all (no location, no weather lookups)
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

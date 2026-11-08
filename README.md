@@ -62,7 +62,8 @@ saver.
 ## Privacy
 
 There are no accounts, no ads and no analytics. To show your local weather the app sends your approximate location
-to these free services, and nothing else:
+to these free services, and nothing else (full details in the [privacy policy](PRIVACY.md); switch **Use online
+weather** off in settings and it makes no network requests at all):
 
 - **Your location**: Windows location services if you allow them, otherwise an approximate location from your IP
   address ([ipwho.is](https://ipwho.is), [ipapi.co](https://ipapi.co)). You can type a city instead in the menu.
@@ -95,6 +96,18 @@ That builds a single native exe, copies it to `%LOCALAPPDATA%\Programs\WindowsWe
 
 Weather and air-quality data by [Open-Meteo.com](https://open-meteo.com) (CC BY 4.0). Aurora data from NOAA SWPC.
 Place names by BigDataCloud.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- Every release is built by [GitHub Actions](.github/workflows/build.yml) from the source in this repository, and only
+  those builds are signed.
+- Committers and reviewers: [PandaPlayz2373](https://github.com/PandaPlayz2373)
+- Approvers (each signed release is approved by hand): [PandaPlayz2373](https://github.com/PandaPlayz2373)
+- Privacy: see the [privacy policy](PRIVACY.md). The program only contacts the services listed there, and only to
+  show the weather; it can be switched to fully offline.
 
 ## License
 

@@ -41,7 +41,7 @@ public sealed unsafe partial class Flyout : IDisposable
     Color4 _accent, _accentText;
 
     // Interaction state
-    enum Id { None, Outside, Arc, Amount, Gear, WeatherBtn, Now, Back, Chip0 = 100, Seg0 = 200, Slider0 = 500, Pause = 300, Fps60, Startup, Saver, Capture, Battery, Location = 400, ClearSnow, Refresh, Quit }
+    enum Id { None, Outside, Arc, Amount, Gear, WeatherBtn, Now, Back, Chip0 = 100, Seg0 = 200, Slider0 = 500, Pause = 300, Fps60, Startup, Saver, Capture, Battery, Online, Location = 400, ClearSnow, Refresh, Privacy, Quit }
     readonly Dictionary<Id, Rect> _hit = new();
     readonly Dictionary<Id, float> _hover = new(), _anim = new();
     Id _hot, _pressed, _drag;
@@ -321,6 +321,7 @@ public sealed unsafe partial class Flyout : IDisposable
         yield return (Id.Startup, s.StartWithWindows ? 1 : 0);
         yield return (Id.Saver, s.RestOnBatterySaver ? 1 : 0);
         yield return (Id.Battery, s.LighterOnBattery ? 1 : 0);
+        yield return (Id.Online, s.Online ? 1 : 0);
         yield return (Id.Capture, s.HideFromCapture ? 1 : 0);
     }
 
@@ -483,7 +484,7 @@ public sealed unsafe partial class Flyout : IDisposable
         (Id id, string label)[] toggles =
         {
             (Id.Pause, "Pause"), (Id.Fps60, "Smoother motion (60 fps)"), (Id.Startup, "Start with Windows"),
-            (Id.Battery, "Lighter on battery (20 fps)"), (Id.Saver, "Rest on battery saver"), (Id.Capture, "Hide from screen capture"),
+            (Id.Online, "Use online weather"), (Id.Battery, "Lighter on battery (20 fps)"), (Id.Saver, "Rest on battery saver"), (Id.Capture, "Hide from screen capture"),
         };
         float rowH = 36;
         var card = new Rect(Pad, y, iw, rowH * toggles.Length);
@@ -512,6 +513,7 @@ public sealed unsafe partial class Flyout : IDisposable
             (Id.Location, "", "Location", where),
             (Id.ClearSnow, "", "Clear all snow", ""),
             (Id.Refresh, "", "Refresh weather", ""),
+            (Id.Privacy, "\uE72E", "Privacy", "What it sends, and to whom"),
         };
         var card2 = new Rect(Pad, y, iw, rowH * actions.Length);
         if (draw) { Fill(card2, 7, Fg(_light ? 0.035f : 0.04f)); Stroke(card2, 7, Fg(0.05f)); }
@@ -531,7 +533,7 @@ public sealed unsafe partial class Flyout : IDisposable
                     if (value.Length > 0) Text(value, _bodyRight, new Rect(r.Left + 150, r.Top, r.Width - 150 - 34, r.Height), Fg(0.6f));
                     if (id == Id.Location) Text("", _icon, new Rect(r.Right - 30, r.Top, 16, r.Height), Fg(0.55f));
                 }
-                if (id != Id.Refresh) Divider(r.Left + 14, r.Right - 14, r.Bottom);
+                if (id != Id.Privacy) Divider(r.Left + 14, r.Right - 14, r.Bottom);
             }
             y += rowH;
         }
@@ -652,6 +654,8 @@ public sealed unsafe partial class Flyout : IDisposable
             case Id.Startup: App.FlyoutCommand("startup", ""); break;
             case Id.Saver: App.FlyoutCommand("saver", ""); break;
             case Id.Battery: App.FlyoutCommand("battery", ""); break;
+            case Id.Online: App.FlyoutCommand("online", ""); break;
+            case Id.Privacy: App.FlyoutCommand("privacy", ""); break;
             case Id.Capture: App.FlyoutCommand("capture", ""); break;
             case Id.Location: _editing = true; _edit = s.City; _caretT = _clock.Elapsed.TotalSeconds; break;
             case Id.ClearSnow: App.FlyoutCommand("clear", ""); break;

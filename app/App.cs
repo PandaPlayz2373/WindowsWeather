@@ -439,6 +439,7 @@ public static unsafe class App
     internal static string StatusText()
     {
         if (S.Paused) return "Paused";
+        if (!S.Online && S.Effect == "Live") return "Online weather is off: pick an effect";
         if (S.Effect == "Off") return "Turned off";
         if (_pFull) return "Resting while a full-screen app is open";
         if (_pSaver && S.RestOnBatterySaver) return "Resting on battery saver";
@@ -567,6 +568,15 @@ public static unsafe class App
             case "startup": OnCommand(Cmd.Startup); break;
             case "saver": OnCommand(Cmd.Saver); break;
             case "battery": S.LighterOnBattery = !S.LighterOnBattery; Store.Save(S); W.Kick(0.2); break;
+            case "online":
+                S.Online = !S.Online; Store.Save(S);
+                Log.Write(S.Online ? "online weather on" : "online weather off: no network lookups");
+                if (S.Online) StartWeatherFetch(force: true);
+                ApplyWeather(false);
+                break;
+            case "privacy":
+                try { Process.Start(new ProcessStartInfo(PrivacyUrl) { UseShellExecute = true }); } catch (Exception e) { Log.Write("privacy link: " + e.Message); }
+                break;
             case "capture": OnCommand(Cmd.Capture); break;
             case "clear": OnCommand(Cmd.ClearSnow); break;
             case "refresh": OnCommand(Cmd.Refresh); break;
@@ -804,7 +814,12 @@ public static unsafe class App
                 case Native.WM_TIMER:
                     if (w == TIMER_WEATHER && !Paused) StartWeatherFetch();
                     if (w == TIMER_TOPMOST) { RaiseOverlays(); CheckFullscreen(); UpdateSun(); SampleStats(); }
-                    if (w == TIMER_FIRSTRUN) { Native.KillTimer(_msgHwnd, TIMER_FIRSTRUN); ToggleFlyout(); } // first run: show where it lives
+                    if (w == TIMER_FIRSTRUN)
+                    {
+                        // First run: open the menu at its settings page, where the privacy notice and the online switch are.
+                        Native.KillTimer(_msgHwnd, TIMER_FIRSTRUN);
+                        if (_gpu != null) { _flyout ??= new Flyout(_gpu); _flyout.ShowView(2); }
+                    }
                     return 0;
                 case Native.WM_DISPLAYCHANGE:
                     Log.Write("display change: rebuilding overlays");
@@ -918,8 +933,11 @@ public static unsafe class App
 
     // ------------------------------------------------------------------ weather
 
+    internal const string PrivacyUrl = "https://github.com/PandaPlayz2373/WindowsWeather/blob/main/PRIVACY.md";
+
     static void StartWeatherFetch(bool force = false)
     {
+        if (!S.Online) return; // the user switched online weather off: no network at all
         if (_fetching) return;
         if (!force && Clock.Elapsed.TotalSeconds - _lastWeatherFetch < 60) return;
         _fetching = true;
