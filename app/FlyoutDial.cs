@@ -201,7 +201,7 @@ public sealed unsafe partial class Flyout
         y += 34;
         const int cols = 7;
         float gap = 6, cw = (iw - gap * (cols - 1)) / cols, ch = 54;
-        string[] glyphs = { "🌤️", "❄️", "🌧️", "☁️", "🌫️", "☀️", "🌇", "🍂", "🌙", "⛈️", "🧊", "🥶", "🌌", "" };
+        string[] glyphs = { "🌤️", "❄️", "🌧️", "☁️", "🌫️", "☀️", "🌇", "🍂", "🌙", "⛈️", "🧊", "🌪️", "🥶", "🌌", "" };
         for (int i = 0; i < App.EffectNames.Length; i++)
         {
             int col = i % cols, row = i / cols;

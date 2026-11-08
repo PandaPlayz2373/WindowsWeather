@@ -40,6 +40,7 @@ Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 | Clear night | The real moon, in its real phase and place; an aurora on nights strong enough to see one from where you are |
 | Wind | Gusts push the snow, rain and leaves, and blow snow off the edges |
 | Poor air quality | A faint haze |
+| Tornado (pick it in the menu) | A funnel drops out of the clouds and crosses the screen. It picks up your windows, swings them around and throws them, and tears the snow, puddles and leaves off everything it crosses. Every window goes back exactly where it was a few seconds after it passes. Maximized and pinned-on-top windows are left alone, and grabbing a window yourself takes it back |
 
 The menu lets you preview any of these, adjust how much snow, rain, leaves and clouds you get, set a city by hand,
 scrub through the time of day, and see what the app is costing your computer right now.

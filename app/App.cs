@@ -52,6 +52,8 @@ public static unsafe class App
         if (args.Contains("--quit")) { QuitRunning(); return 0; }
         if (args.Contains("--dump")) { PostToRunning(WM_DUMP); return 0; }
         if (args.Contains("--strike")) { PostToRunning(WM_DUMP, 7); return 0; } // a lightning strike now (testing)
+        if (args.Contains("--tornado")) { PostToRunning(WM_DUMP, 8); return 0; } // a tornado now (testing)
+        if (args.Contains("--tornado-test")) { PostToRunning(WM_DUMP, 9); return 0; } // a tornado that only moves windows titled WWTest
         if (args.Contains("--pause")) { PostToRunning(WM_SETPAUSE, 1); return 0; }
         if (args.Contains("--resume")) { PostToRunning(WM_SETPAUSE, 0); return 0; }
         foreach (var a in args)
@@ -341,6 +343,7 @@ public static unsafe class App
         }
         if (p)
         {
+            W.RestoreWindows();
             DisarmTimer();
             T.SetQuiet(true);
             Native.KillTimer(_msgHwnd, TIMER_TOPMOST);
@@ -679,7 +682,7 @@ public static unsafe class App
         IntLight = 130, IntMed, IntHeavy, Fps30 = 140, Fps60, LocAuto = 150, LocCity, Capture = 160, Startup, ClearSnow, Refresh, Saver, Quit = 199,
     }
 
-    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Hail", "Frost", "Aurora", "Off" };
+    static readonly string[] Effects = { "Live", "Snow", "Rain", "Clouds", "Fog", "Sun", "Sunset", "Leaves", "Night", "Storm", "Hail", "Tornado", "Frost", "Aurora", "Off" };
 
     static void Append(nint menu, uint flags, Cmd id, string text) { fixed (char* t = text) Native.AppendMenuW(menu, flags, (nuint)id, t); }
     static void AppendSub(nint menu, nint sub, string text) { fixed (char* t = text) Native.AppendMenuW(menu, Native.MF_POPUP, (nuint)sub, t); }
@@ -805,6 +808,8 @@ public static unsafe class App
                     return 0;
                 case WM_DUMP:
                     if (w == 7) { W.StrikeNow(); return 0; }
+                    if (w == 8) { W.GrabOnlyTitle = null; W.TornadoNow(); return 0; }
+                    if (w == 9) { W.GrabOnlyTitle = "WWTest"; W.TornadoNow(); return 0; }
                     Log.Write($"DUMP paused={Paused} (user={S.Paused} full={_pFull} locked={_pLocked} displayOff={_pDisplayOff} saver={_pSaver}) effect={S.Effect} frames={_frames} fps={W.DesiredFps(MaxFps())} events={Tracker.EventCount} cursorEvents={Tracker.CursorEvents}");
                     Log.Write("DUMP " + W.Describe());
                     Log.Write("DUMP prof " + W.ProfileText());
@@ -968,7 +973,7 @@ public static unsafe class App
         W.Target = target;
         W.IsDay = isDay;
         ApplyAmounts();
-        W.WindX = w != null && S.Effect == "Live" ? WeatherService.WindX(w) : (S.Effect is "Snow" or "Rain" or "Storm" ? 10 : 0);
+        W.WindX = w != null && S.Effect == "Live" ? WeatherService.WindX(w) : (S.Effect is "Snow" or "Rain" or "Storm" or "Tornado" ? 10 : 0);
         if (St.HasLoc)
         {
             var (az, el) = WeatherService.Sun(St.Lat, St.Lon, DateTime.UtcNow);
@@ -976,7 +981,7 @@ public static unsafe class App
             W.SunElev = (float)el;
         }
         else { W.SunX = 0.5f; W.SunElev = 30; }
-        W.GustKmh = w != null && S.Effect is "Live" or "Storm" or "Leaves" ? (float)Math.Max(w.WindGust, S.Effect == "Storm" ? 45 : S.Effect == "Leaves" ? 30 : 0) : 0;
+        W.GustKmh = w != null && S.Effect is "Live" or "Storm" or "Leaves" or "Tornado" ? (float)Math.Max(w.WindGust, S.Effect == "Storm" ? 45 : S.Effect == "Tornado" ? 60 : S.Effect == "Leaves" ? 30 : 0) : 0;
         W.WindKmh = (float)(w?.WindKmh ?? 0);
         // Deep snow on the ground: taller piles (0 cm: normal, 30 cm or more: 1.7x).
         W.PileScale = 1 + (float)Math.Clamp((w?.SnowDepthM ?? 0) / 0.3, 0, 1) * 0.7f;
@@ -1020,6 +1025,7 @@ public static unsafe class App
     static void Shutdown()
     {
         Log.Write("quit");
+        W.RestoreWindows();
         T.Unhook();
         var ab = new Native.APPBARDATA { cbSize = (uint)sizeof(Native.APPBARDATA), hWnd = _msgHwnd };
         Native.SHAppBarMessage(Native.ABM_REMOVE, &ab);

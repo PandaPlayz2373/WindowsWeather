@@ -19,7 +19,7 @@ public sealed class Monitor
 /// <summary>How much of each effect is on screen. Crossfaded towards the target over ~10 s.</summary>
 public struct Mix
 {
-    public float Snow, Rain, Haze, Wisps, Glow, Night, Storm, Low, Mid, High, Fog, Leaves, Frost, Hail, Aurora, Smog;
+    public float Snow, Rain, Haze, Wisps, Glow, Night, Storm, Low, Mid, High, Fog, Leaves, Frost, Hail, Aurora, Smog, Tornado;
     public static Mix Lerp(Mix a, Mix b, float t) => new()
     {
         Snow = a.Snow + (b.Snow - a.Snow) * t, Rain = a.Rain + (b.Rain - a.Rain) * t, Haze = a.Haze + (b.Haze - a.Haze) * t,
@@ -27,6 +27,7 @@ public struct Mix
         Storm = a.Storm + (b.Storm - a.Storm) * t, Low = a.Low + (b.Low - a.Low) * t, Mid = a.Mid + (b.Mid - a.Mid) * t,
         High = a.High + (b.High - a.High) * t, Fog = a.Fog + (b.Fog - a.Fog) * t, Leaves = a.Leaves + (b.Leaves - a.Leaves) * t,
         Frost = a.Frost + (b.Frost - a.Frost) * t, Hail = a.Hail + (b.Hail - a.Hail) * t, Aurora = a.Aurora + (b.Aurora - a.Aurora) * t, Smog = a.Smog + (b.Smog - a.Smog) * t,
+        Tornado = a.Tornado + (b.Tornado - a.Tornado) * t,
     };
     public readonly float MaxDiff(Mix b)
     {
@@ -34,7 +35,7 @@ public struct Mix
         void D(float x, float y) { float d = MathF.Abs(x - y); if (d > m) m = d; }
         D(Snow, b.Snow); D(Rain, b.Rain); D(Haze, b.Haze); D(Wisps, b.Wisps); D(Glow, b.Glow); D(Night, b.Night); D(Storm, b.Storm);
         D(Low, b.Low); D(Mid, b.Mid); D(High, b.High); D(Fog, b.Fog); D(Leaves, b.Leaves);
-        D(Frost, b.Frost); D(Hail, b.Hail); D(Aurora, b.Aurora); D(Smog, b.Smog);
+        D(Frost, b.Frost); D(Hail, b.Hail); D(Aurora, b.Aurora); D(Smog, b.Smog); D(Tornado, b.Tornado);
         return m;
     }
     public readonly bool Any => Snow > 0.001f || Rain > 0.001f || Haze > 0.001f || Wisps > 0.001f || Glow > 0.001f || Night > 0.001f || Storm > 0.001f;
@@ -82,7 +83,7 @@ public sealed partial class World
     /// <summary>Is anything on screen tied to a window's position (piles, puddles, beads, resting leaves, glow)?</summary>
     public bool NeedsPositions()
     {
-        if (Cur.Glow > 0.01f) return true;
+        if (Cur.Glow > 0.01f || _torOn) return true;
         foreach (var w in Tracker.Z) if (w.PileTotal > 0.3f || w.WaterTotal > 0.3f || w.Beads.Count > 0) return true;
         for (int i = 0; i < _nLeaves; i++) if (_leaves[i].On != null) return true;
         return false;
@@ -224,6 +225,7 @@ public sealed partial class World
 
         UpdateCursor(dt);
         StepGusts(dt);
+        StepTornado(dt);
         StepFlakes(dt);
         StepLeaves(dt);
         StepHail(dt);
@@ -582,6 +584,7 @@ public sealed partial class World
             d.Vy += g * dt;
             float drag = MathF.Exp(-dt * (d.Water != 0 ? 0.6f : 1.4f));
             d.Vx *= drag;
+            if (_torOn) TornadoPull(d.X, d.Y, 1, dt, 1450, ref d.Vx, ref d.Vy);
             if (d.Water == 0) d.Vy = MathF.Min(d.Vy, 900);
             d.X += d.Vx * dt; d.Y += d.Vy * dt;
             if (d.Water != 0) d.Life -= dt * 0.8f;
@@ -635,7 +638,7 @@ public sealed partial class World
         if (_nFlakes > 0 || _nDrops > 0 || _nDebris > 0 || Cur.Snow > 0.01f || Cur.Rain > 0.01f || Cur.Storm > 0.01f) return maxFps;
         if (Now < ActiveUntil) return maxFps;
         if (Now - LastCursorMove < 0.4) return maxFps;
-        if (BoltIntensity() > 0) return maxFps;
+        if (BoltIntensity() > 0 || TornadoBusy) return maxFps;
         if (_twinkles.Count > 0 || Now - _flashT < 1) return Math.Min(30, maxFps);
         if (Cur.MaxDiff(Target) > 0) return 15;
         if (_ripples.Count > 0) return maxFps;
@@ -763,6 +766,7 @@ public sealed partial class World
         AddAuroraSprites(m);
         AddMoonSprites(m);
         AddCloudSprites(m);
+        AddTornadoSprites(m);
 
         // Sun glow: light catching the top edge of each window. Drawn from "additive" sprites (colour, zero alpha),
         // so it only ever brightens what is under it; it can never muddy a dark window brown.

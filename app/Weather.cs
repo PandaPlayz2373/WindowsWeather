@@ -472,6 +472,7 @@ public static class WeatherService
         "Night" => new Mix { Night = 1f },
         "Storm" => new Mix { Rain = 0.9f, Storm = 1f, Haze = 0.45f, Low = 1f, Mid = 0.6f },
         "Hail" => new Mix { Hail = 1f, Rain = 0.35f, Low = 0.9f, Mid = 0.4f },
+        "Tornado" => new Mix { Tornado = 1f, Rain = 0.35f, Storm = 0.6f, Haze = 0.5f, Low = 1f, Mid = 0.6f, Leaves = 0.5f },
         "Frost" => new Mix { Frost = 1f, High = 0.2f },
         "Aurora" => new Mix { Aurora = 1f, Night = 0.6f },
         _ => new Mix(),
