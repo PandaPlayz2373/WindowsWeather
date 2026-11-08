@@ -139,8 +139,9 @@ public sealed partial class World
         int dx = w.R.Left - old.Left, dy = w.R.Top - old.Top;
         if (resized)
         {
-            // The cap breaks up and falls off.
+            // The cap breaks up and falls off, and the icicles snap.
             DropPile(w, 0, 0);
+            BreakIcicles(w, 0, 0);
             w.EnsureColumns();
             w.Vx = w.Vy = 0;
             return;
@@ -153,6 +154,7 @@ public sealed partial class World
         w.Vy = w.Vy * 0.45f + ivy * 0.55f;
         float speed = MathF.Sqrt(w.Vx * w.Vx + w.Vy * w.Vy);
         float fling = 1300 * w.Scale;
+        if (speed > fling) BreakIcicles(w, w.Vx, w.Vy);
         if (speed > fling && w.PileTotal > 0.5f)
             DropPile(w, w.Vx, w.Vy);          // flung: the snow flies off with the throw
         else if (speed > fling) LeavesFall(w, w.Vx, w.Vy);
@@ -230,6 +232,7 @@ public sealed partial class World
         StepFlood(dt);
         StepGrabs(dt);
         StepTiles(dt);
+        StepIcicles(dt);
         StepFlakes(dt);
         StepLeaves(dt);
         StepHail(dt);
@@ -658,6 +661,7 @@ public sealed partial class World
         foreach (var w in Tracker.Z) if (w.WaterTotal > 0.05f && Cur.Rain < 0.05f && Cur.Storm < 0.05f) return 5; // puddles drying
         foreach (var w in Tracker.Z) if (w.PileTotal > 0.05f && Cur.Snow < 0.05f) return 5; // melting
         foreach (var w in Tracker.Z) if (Now - w.GlintStart < 0.8) return maxFps;
+        if (_iciclesGrowing && extras < 5) return 5;                       // icicles growing or melting: slow
         return extras;
     }
 
@@ -709,7 +713,7 @@ public sealed partial class World
 
         _lastSprites = _sprites.Count;
         bool flash = FlashAlpha() > 0.002f;
-        bool content = _sprites.Count > 0 || flash || FrostVisible(m) || DisasterVisible(m);
+        bool content = _sprites.Count > 0 || flash || FrostVisible(m) || DisasterVisible(m) || IciclesVisible(m);
         if (!content && !ov.HasContent) return; // already blank: nothing to present
 
         ctx.Target = ov.Target;
@@ -746,6 +750,7 @@ public sealed partial class World
                 ctx.Transform = baseXf;
             }
         }
+        DrawIcicles(gpu, m);
         DrawTiles(gpu, m, cover: false);
         DrawCracks(gpu, m);
         DrawBolt(gpu, m);

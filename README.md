@@ -37,6 +37,7 @@ Needs Windows 10 (version 2004 or later) or Windows 11, 64-bit.
 | Sun | Light along the top edges of your windows, brightest on the side facing the real sun |
 | Sunset | Clouds lit gold, pink and violet from the inside as the real sun sets |
 | Freezing and humid | Frost crystals slowly grow in from the edges of the screen |
+| Snowing or freezing | Icicles slowly grow down from the top corners of your windows, snap off if you resize or fling the window, and melt and drip when it warms up |
 | Autumn | Leaves tumble down, more when it is windy, and settle on your windows |
 | Clear night | The real moon, in its real phase and place; an aurora on nights strong enough to see one from where you are |
 | Wind | Gusts push the snow, rain and leaves, and blow snow off the edges |

@@ -558,7 +558,7 @@ public static unsafe class App
     internal static (string key, string label)[] ModsFor(string effect) => effect switch
     {
         "Live" => [("Snow", "Snow"), ("Rain", "Rain"), ("Leaves", "Leaves"), ("Clouds", "Clouds")],
-        "Snow" => [("Snow", "Amount"), ("Snow.Size", "Flake size"), ("Snow.Piles", "Pile height")],
+        "Snow" => [("Snow", "Amount"), ("Snow.Size", "Flake size"), ("Snow.Piles", "Pile height"), ("Icicles.Length", "Icicles")],
         "Rain" => [("Rain", "Amount"), ("Rain.Speed", "Drop speed"), ("Rain.Puddles", "Puddles")],
         "Clouds" => [("Clouds", "Density"), ("Clouds.Height", "Height")],
         "Fog" => [("Fog.Thickness", "Thickness")],
@@ -568,7 +568,7 @@ public static unsafe class App
         "Night" => [("Night.Stars", "Twinkles")],
         "Storm" => [("Storm.Frequency", "Lightning"), ("Storm.Strength", "Strength"), ("Rain", "Rain")],
         "Hail" => [("Hail.Amount", "Amount"), ("Hail.Size", "Size")],
-        "Frost" => [("Frost.Speed", "Growth")],
+        "Frost" => [("Frost.Speed", "Growth"), ("Icicles.Length", "Icicles")],
         "Aurora" => [("Aurora.Brightness", "Brightness")],
         "Tornado" => [("Tornado.Size", "Size"), ("Tornado.Speed", "Speed"), ("Tornado.Power", "Power")],
         "Earthquake" => [("Earthquake.Magnitude", "Magnitude"), ("Earthquake.Frequency", "How often")],
